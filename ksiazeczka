@@ -1,0 +1,256 @@
+import sys
+import pandas as pd
+
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QPushButton, QTableWidget,
+    QTableWidgetItem, QFileDialog, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QComboBox, QHBoxLayout
+)
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+class Ksiazka:
+    def __init__(self, tytul, autor, gatunek, rok_wydania, cena):
+        self.tytul = tytul
+        self.autor = autor
+        self.gatunek = gatunek
+        self.rok_wydania = int(rok_wydania)
+        self.cena = float(cena)
+
+    def __str__(self):
+        return f"{self.tytul} {self.autor} {self.gatunek} {self.rok_wydania} {self.cena:.2f}"
+
+
+class BibliotekaManager:
+    def __init__(self):
+        self.ksiazki = []
+
+    def dodaj_ksiazke(self, ksiazka):
+        self.ksiazki.append(ksiazka)
+
+    def oblicz_wartosc_biblioteki(self):
+        suma = 0
+
+        for ksiazka in self.ksiazki:
+            suma += ksiazka.cena
+
+        return suma
+
+    def oblicz_wartosc_gatunkow(self):
+        suma = {}
+
+        for ksiazka in self.ksiazki:
+            if ksiazka.gatunek in suma:
+                suma[ksiazka.gatunek] += ksiazka.cena
+            else:
+                suma[ksiazka.gatunek] = ksiazka.cena
+
+        return suma
+
+    def wczytaj_z_excela(self, sciezka_pliku):
+        self.czysc_dane()
+
+        dane = pd.read_excel(sciezka_pliku)
+
+        for _, wiersz in dane.iterrows():
+            ksiazka = Ksiazka(
+                wiersz["tytul"],
+                wiersz["autor"],
+                wiersz["gatunek"],
+                wiersz["rok_wydania"],
+                wiersz["cena"]
+            )
+
+            self.dodaj_ksiazke(ksiazka)
+
+    def zapisz_do_excela(self, sciezka_pliku):
+        dane = []
+
+        for ksiazka in self.ksiazki:
+            dane.append({
+                "tytul": ksiazka.tytul,
+                "autor": ksiazka.autor,
+                "gatunek": ksiazka.gatunek,
+                "rok_wydania": ksiazka.rok_wydania,
+                "cena": ksiazka.cena
+            })
+
+        df = pd.DataFrame(dane)
+        df.to_excel(sciezka_pliku, index=False)
+
+    def czysc_dane(self):
+        self.ksiazki.clear()
+
+
+class BibliotekaApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.manager = BibliotekaManager()
+
+        self.setWindowTitle("Biblioteka")
+        self.setGeometry(300, 300, 900, 600)
+
+        self.przycisk_wczytaj = QPushButton("Wczytaj Excel")
+        self.przycisk_wczytaj.clicked.connect(self.wczytaj_plik)
+
+        self.przycisk_zapisz = QPushButton("Zapisz Excel")
+        self.przycisk_zapisz.clicked.connect(self.zapisz_plik)
+
+        self.tabela = QTableWidget()
+        self.tabela.setColumnCount(5)
+        self.tabela.setHorizontalHeaderLabels(
+            ["Tytuł", "Autor", "Gatunek", "Rok wydania", "Cena"]
+        )
+
+        self.figure = Figure()
+        self.canvas = FigureCanvas(self.figure)
+
+        self.tytul_input = QLineEdit()
+        self.tytul_input.setPlaceholderText("Tytuł")
+
+        self.autor_input = QLineEdit()
+        self.autor_input.setPlaceholderText("Autor")
+
+        self.gatunek_input = QComboBox()
+        self.gatunek_input.addItems(["Fantasy", "Naukowe", "Religia"])
+
+        self.rok_input = QLineEdit()
+        self.rok_input.setPlaceholderText("Rok wydania")
+
+        self.cena_input = QLineEdit()
+        self.cena_input.setPlaceholderText("Cena")
+
+        self.przycisk_dodaj = QPushButton("Dodaj książkę")
+        self.przycisk_dodaj.clicked.connect(self.dodaj_recznie)
+
+        self.podsumowanie_label = QLabel("Suma wartości: 0.00 zł")
+        self.komunikat_label = QLabel("")
+
+        formularz = QHBoxLayout()
+        formularz.addWidget(self.tytul_input)
+        formularz.addWidget(self.autor_input)
+        formularz.addWidget(self.gatunek_input)
+        formularz.addWidget(self.rok_input)
+        formularz.addWidget(self.cena_input)
+        formularz.addWidget(self.przycisk_dodaj)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Aplikacja biblioteki"))
+        layout.addWidget(self.przycisk_wczytaj)
+        layout.addWidget(self.przycisk_zapisz)
+        layout.addLayout(formularz)
+        layout.addWidget(self.tabela)
+        layout.addWidget(self.podsumowanie_label)
+        layout.addWidget(self.komunikat_label)
+        layout.addWidget(self.canvas)
+
+        kontener = QWidget()
+        kontener.setLayout(layout)
+        self.setCentralWidget(kontener)
+
+    def wczytaj_plik(self):
+        sciezka, _ = QFileDialog.getOpenFileName(
+            self,
+            "Wczytaj plik Excel",
+            "",
+            "Pliki Excel (*.xlsx)"
+        )
+
+        if sciezka:
+            try:
+                self.manager.wczytaj_z_excela(sciezka)
+                self.odswiez_tabele()
+                self.odswiez_wykres()
+                self.komunikat_label.setText("Wczytano plik Excel.")
+            except Exception:
+                self.komunikat_label.setText("Błąd wczytywania pliku. Sprawdź nazwy kolumn.")
+
+    def zapisz_plik(self):
+        sciezka, _ = QFileDialog.getSaveFileName(
+            self,
+            "Zapisz plik Excel",
+            "",
+            "Pliki Excel (*.xlsx)"
+        )
+
+        if sciezka:
+            if not sciezka.endswith(".xlsx"):
+                sciezka += ".xlsx"
+
+            try:
+                self.manager.zapisz_do_excela(sciezka)
+                self.komunikat_label.setText("Zapisano plik Excel.")
+            except Exception:
+                self.komunikat_label.setText("Błąd zapisu pliku.")
+
+    def dodaj_recznie(self):
+        if (
+            self.tytul_input.text() == ""
+            or self.autor_input.text() == ""
+            or self.rok_input.text() == ""
+            or self.cena_input.text() == ""
+        ):
+            self.komunikat_label.setText("Uzupełnij wszystkie pola.")
+            return
+
+        try:
+            ksiazka = Ksiazka(
+                self.tytul_input.text(),
+                self.autor_input.text(),
+                self.gatunek_input.currentText(),
+                self.rok_input.text(),
+                self.cena_input.text()
+            )
+        except ValueError:
+            self.komunikat_label.setText("Błąd: rok wydania i cena muszą być liczbami.")
+            return
+
+        self.manager.dodaj_ksiazke(ksiazka)
+
+        self.odswiez_tabele()
+        self.odswiez_wykres()
+
+        self.tytul_input.clear()
+        self.autor_input.clear()
+        self.rok_input.clear()
+        self.cena_input.clear()
+        self.gatunek_input.setCurrentIndex(0)
+
+        self.komunikat_label.setText("Dodano książkę.")
+
+    def odswiez_tabele(self):
+        self.tabela.setRowCount(len(self.manager.ksiazki))
+
+        for i, ksiazka in enumerate(self.manager.ksiazki):
+            self.tabela.setItem(i, 0, QTableWidgetItem(ksiazka.tytul))
+            self.tabela.setItem(i, 1, QTableWidgetItem(ksiazka.autor))
+            self.tabela.setItem(i, 2, QTableWidgetItem(ksiazka.gatunek))
+            self.tabela.setItem(i, 3, QTableWidgetItem(str(ksiazka.rok_wydania)))
+            self.tabela.setItem(i, 4, QTableWidgetItem(f"{ksiazka.cena:.2f}"))
+
+        suma = self.manager.oblicz_wartosc_biblioteki()
+        self.podsumowanie_label.setText(f"Suma wartości: {suma:.2f} zł")
+
+    def odswiez_wykres(self):
+        dane = self.manager.oblicz_wartosc_gatunkow()
+
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+
+        if dane:
+            ax.bar(dane.keys(), dane.values())
+            ax.set_title("Wartość książek według gatunku")
+            ax.set_xlabel("Gatunek")
+            ax.set_ylabel("Wartość [zł]")
+
+        self.canvas.draw()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    okno = BibliotekaApp()
+    okno.show()
+    sys.exit(app.exec_())
