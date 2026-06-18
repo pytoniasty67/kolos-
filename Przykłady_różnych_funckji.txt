@@ -482,3 +482,16 @@ def czy_istnieje(self, nazwa):
 
     return False
 
+System Analizy Efektywności Treningowej ppl 
+
+Budżet domowy (Finanse Osobiste) cos tam po ang
+
+Komis samochodowy mirek
+
+Panel Managera Floty Pojazdów (Logistyka & Transport) szkoda
+
+System Koordynacji Obsługi Naziemnej Samolotów dół
+
+System kontroli i rejestracji ruchu lotniczego góra
+
+System Monitorowania Stacji Pogodowej winda
