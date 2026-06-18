@@ -1,0 +1,152 @@
+import sys
+import json
+import pandas as pd
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QPushButton, QTableWidget, QTableWidgetItem,
+    QFileDialog, QVBoxLayout, QWidget, QLabel, QLineEdit, QComboBox,
+    QHBoxLayout, QSpinBox, QDoubleSpinBox
+)
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+# ==========================================
+# CZĘŚĆ 1: WARSTWA LOGIKI I MODEL DANYCH
+# ==========================================
+
+class ObiektBazowy: # ZMIEN_TO: np. ProceduraObslugi, Tankowanie, OdczytPogodowy
+    def __init__(self, pole1, pole2, pole3):
+        self.pole1 = str(pole1)
+        self.pole2 = int(pole2)    # ZMIEN_TO: int() dla liczb całych
+        self.pole3 = float(pole3)  # ZMIEN_TO: float() dla ułamków
+
+class Menedzer: # ZMIEN_TO: np. MenedzerPlyty, FlotaManager, BazaPogodowa
+    def __init__(self):
+        self.dane = [] # Nasz segregator
+
+    def dodaj(self, obiekt):
+        self.dane.append(obiekt)
+
+    # Przykład uniwersalnej pętli liczącej statystyki (Suma)
+    def statystyki_suma(self):
+        wyniki = {}
+        for element in self.dane:
+            klucz = element.pole1
+            wartosc = element.pole3
+            if klucz in wyniki:
+                wyniki[klucz] += wartosc
+            else:
+                wyniki[klucz] = wartosc
+        return wyniki
+
+    # ==========================================
+    # CZĘŚĆ 2: TRWAŁOŚĆ DANYCH (EXCEL / JSON)
+    # Usuń ten wariant, którego nie ma w poleceniu!
+    # ==========================================
+
+    def zapisz_excel(self, sciezka):
+        lista_slownikow = []
+        for d in self.dane:
+            lista_slownikow.append({
+                "Kolumna 1": d.pole1, # ZMIEN_TO
+                "Kolumna 2": d.pole2
+            })
+        df = pd.DataFrame(lista_slownikow)
+        df.to_excel(sciezka, index=False)
+
+    def zapisz_json(self, sciezka):
+        lista_slownikow = []
+        for d in self.dane:
+            lista_slownikow.append(d.__dict__) # Magiczny trik: _dict_ zamienia obiekt na słownik
+        with open(sciezka, 'w', encoding='utf-8') as f:
+            json.dump(lista_slownikow, f, indent=4)
+
+    def wczytaj_json(self, sciezka):
+        self.dane.clear()
+        try:
+            with open(sciezka, 'r', encoding='utf-8') as f:
+                dane_z_pliku = json.load(f)
+                for wiersz in dane_z_pliku:
+                    nowy_obiekt = ObiektBazowy(wiersz["pole1"], wiersz["pole2"], wiersz["pole3"])
+                    self.dodaj(nowy_obiekt)
+        except FileNotFoundError:
+            pass # Jeśli plik nie istnieje przy starcie, po prostu go ignorujemy
+
+# ==========================================
+# CZĘŚĆ 3: INTERFEJS GRAFICZNY (GUI)
+# ==========================================
+
+class Aplikacja(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.manager = Menedzer()
+        self.setWindowTitle("ZMIEN_TO: Nazwa Programu")
+        self.setGeometry(200, 200, 1000, 700)
+
+        # 1. KLOCKI (Pola wejściowe)
+        self.input1 = QLineEdit()
+        self.input1.setPlaceholderText("Tekst...")
+        
+        self.input2 = QSpinBox() # Dla Int
+        self.input2.setRange(0, 1000)
+        
+        self.input_combo = QComboBox()
+        self.input_combo.addItems(["Opcja A", "Opcja B"])
+
+        self.btn_dodaj = QPushButton("Dodaj")
+        self.btn_dodaj.clicked.connect(self.akcja_dodaj)
+
+        # 2. TABELA
+        self.tabela = QTableWidget()
+        self.tabela.setColumnCount(3) # ZMIEN_TO: Ilość kolumn
+        self.tabela.setHorizontalHeaderLabels(["Kol 1", "Kol 2", "Kol 3"])
+
+        # 3. WYKRES
+        self.figure = Figure()
+        self.canvas = FigureCanvas(self.figure)
+
+        # 4. UKŁADANIE W PUDEŁKACH (Layouty)
+        formularz = QHBoxLayout()
+        formularz.addWidget(self.input1)
+        formularz.addWidget(self.input2)
+        formularz.addWidget(self.input_combo)
+        formularz.addWidget(self.btn_dodaj)
+
+        layout_glowny = QVBoxLayout()
+        layout_glowny.addLayout(formularz)
+        layout_glowny.addWidget(self.tabela)
+        layout_glowny.addWidget(self.canvas)
+
+        kontener = QWidget()
+        kontener.setLayout(layout_glowny)
+        self.setCentralWidget(kontener)
+
+    def akcja_dodaj(self):
+        if self.input1.text() == "": return
+
+        nowy = ObiektBazowy(
+            self.input1.text(),
+            self.input2.value(),
+            self.input_combo.currentText()
+        )
+        self.manager.dodaj(nowy)
+        self.odswiez_tabele()
+        self.odswiez_wykres()
+
+    def odswiez_tabele(self):
+        self.tabela.setRowCount(len(self.manager.dane))
+        for wiersz, element in enumerate(self.manager.dane):
+            self.tabela.setItem(wiersz, 0, QTableWidgetItem(str(element.pole1)))
+            self.tabela.setItem(wiersz, 1, QTableWidgetItem(str(element.pole2)))
+            self.tabela.setItem(wiersz, 2, QTableWidgetItem(str(element.pole3)))
+
+    def odswiez_wykres(self):
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        dane_wykresu = self.manager.statystyki_suma()
+        
+        if dane_wykresu:
+            # ZMIEN_TO: ax.bar (słupkowy), ax.pie (kołowy), ax.plot (liniowy)
+            ax.bar(dane_wykresu.keys(), dane_wykresu.values()) 
+            ax.set_title("Tytuł Wykresu")
+
+        self.canvas.draw()
