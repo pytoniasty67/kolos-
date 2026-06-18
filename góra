@@ -243,3 +243,4 @@ if __name__ == "__main__":
     lotnisko.zapisz_rozklad()
     sys.exit(kod_wyjscia)
 pip install PyQt5 matplotlib
+System kontroli i rejestracji ruchu lotniczego
