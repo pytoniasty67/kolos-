@@ -1,0 +1,29 @@
+1. Warstwa Logiki (OOP) – „Mózg programu”
+Składa się zawsze z dwóch klas:
+
+Klasa Modelu (Obiekt danych): (np. Tankowanie, Trening, OdczytPogodowy). To pojedynczy wpis w bazie. Definiuje, jakie pola ma obiekt (np. self.id, self.data, self.wartosc).
+
+Klasa Menedżera (Baza danych w RAM): (np. FlotaManager, DziennikTreningowy). Zawiera pustą listę (self.lista = []) oraz metody do zarządzania nią: dodaj(), usun(), oblicz_srednia().
+
+2. Warstwa Trwałości Danych – „Pamięć programu”
+Zapobiega utracie danych po wyłączeniu komputera. Dwa warianty:
+
+Wariant JSON: Prosty plik tekstowy. Obiekty zamieniane są na słowniki za pomocą sztuczki __dict__, a potem zapisywane przez json.dump().
+
+Wariant Excel (Pandas): Lista obiektów mapowana jest na listę słowników, ładowana do tabeli pd.DataFrame() i zapisywana jedną komendą: df.to_excel().
+
+3. Warstwa Interfejsu (PyQt5) – „Karoseria programu”
+Odpowiada za to, co widzi użytkownik. Kluczowe pojęcia:
+
+Układy (Layouts): Niewidzialne pudełka pozycjonujące elementy. QVBoxLayout układa widżety pionowo (jeden pod drugim), a QHBoxLayout poziomo (obok siebie).
+
+Sygnały i Sloty (Signals & Slots): Mechanizm łączenia interfejsu z kodem. Kliknięcie przycisku generuje sygnał, który odpala przypisaną funkcję, np.: btn.clicked.connect(self.dodaj_dane).
+
+4. Warstwa Wykresów (Matplotlib) – „Prezentacja danych”
+Osadzona w oknie za pomocą FigureCanvasQTAgg. Zawsze działa w niezmiennym cyklu trzech kroków:
+
+ax.clear() – Wyczyszczenie starego wykresu (zapobiega nakładaniu się linii/słupków).
+
+ax.bar() lub ax.plot() – Narysowanie nowych danych na osi X i Y.
+
+self.canvas.draw() – Fizyczne odświeżenie ekranu, by użytkownik zobaczył zmiany.
