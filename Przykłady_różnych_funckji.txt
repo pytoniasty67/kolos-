@@ -1,0 +1,484 @@
+#########1. Obliczanie całkowitej wartości#############
+##########Przykład: wartość całej biblioteki, kolekcji filmów, magazynu.##############
+
+def oblicz_wartosc_calkowita(self):
+    suma = 0
+
+    for obiekt in self.lista:
+        suma += obiekt.cena
+
+    return suma
+
+#############2. Obliczanie średniej wartości############
+##############Przykład: średnia cena książki, filmu, produktu.############
+
+def oblicz_srednia_cene(self):
+    if len(self.lista) == 0:
+        return 0
+
+    suma = 0
+
+    for obiekt in self.lista:
+        suma += obiekt.cena
+
+    return suma / len(self.lista)
+
+###########3. Obliczanie wartości według kategorii/gatunku/typu###########
+#############Przykład: wartość filmów według gatunku.##################
+
+def oblicz_wartosc_typow(self):
+    suma = {}
+
+    for obiekt in self.lista:
+        if obiekt.typ in suma:
+            suma[obiekt.typ] += obiekt.cena
+        else:
+            suma[obiekt.typ] = obiekt.cena
+
+    return suma
+
+##################4. Liczenie liczby obiektów danego typu###########
+##################Przykład: ile jest filmów danego gatunku.########
+
+def policz_typy(self):
+    licznik = {}
+
+    for obiekt in self.lista:
+        if obiekt.typ in licznik:
+            licznik[obiekt.typ] += 1
+        else:
+            licznik[obiekt.typ] = 1
+
+    return licznik
+
+####################5. Znalezienie najdroższego obiektu##############
+####################Przykład: najdroższa książka, film, produkt.##############
+
+def znajdz_najdrozszy(self):
+    if len(self.lista) == 0:
+        return None
+
+    najdrozszy = self.lista[0]
+
+    for obiekt in self.lista:
+        if obiekt.cena > najdrozszy.cena:
+            najdrozszy = obiekt
+
+    return najdrozszy
+
+######################6. Znalezienie najtańszego obiektu##################
+
+def znajdz_najtanszy(self):
+    if len(self.lista) == 0:
+        return None
+
+    najtanszy = self.lista[0]
+
+    for obiekt in self.lista:
+        if obiekt.cena < najtanszy.cena:
+            najtanszy = obiekt
+
+    return najtanszy
+
+#################7. Znalezienie największej wartości liczbowej##############
+#################Przykład: największy przebieg auta, największa liczba dni wypożyczenia.#########
+
+def znajdz_najwiekszy_przebieg(self):
+    if len(self.lista) == 0:
+        return None
+
+    najwiekszy = self.lista[0]
+
+    for obiekt in self.lista:
+        if obiekt.przebieg > najwiekszy.przebieg:
+            najwiekszy = obiekt
+
+    return najwiekszy
+
+#################8. Znalezienie najmniejszej wartości liczbowej##################
+##################Przykład: najmniejsze spalanie, najkrótszy czas wypożyczenia.##############
+
+def znajdz_najmniejsza_wartosc(self):
+    if len(self.lista) == 0:
+        return None
+
+    najmniejszy = self.lista[0]
+
+    for obiekt in self.lista:
+        if obiekt.wartosc < najmniejszy.wartosc:
+            najmniejszy = obiekt
+
+    return najmniejszy
+
+###############9. Filtrowanie po nazwie, typie albo kategorii#############
+###############Przykład: pokaż tylko książki z gatunku „fantasy”.##############
+
+def filtruj_po_typie(self, typ):
+    wynik = []
+
+    for obiekt in self.lista:
+        if obiekt.typ == typ:
+            wynik.append(obiekt)
+
+    return wynik
+
+#####################10. Obliczanie sumy tylko dla wybranego typu##############
+######################Przykład: suma cen tylko filmów akcji.###################
+
+def oblicz_wartosc_danego_typu(self, typ):
+    suma = 0
+
+    for obiekt in self.lista:
+        if obiekt.typ == typ:
+            suma += obiekt.cena
+
+    return suma
+
+##################11. Obliczanie średniej tylko dla wybranego typu##################
+###################Przykład: średnia cena książek z danego gatunku.#################
+
+def oblicz_srednia_dla_typu(self, typ):
+    suma = 0
+    licznik = 0
+
+    for obiekt in self.lista:
+        if obiekt.typ == typ:
+            suma += obiekt.cena
+            licznik += 1
+
+    if licznik == 0:
+        return 0
+
+    return suma / licznik
+
+##################12. Obliczanie przychodu#######################
+###################Przykład: hotel, restauracja, wypożyczalnia.################
+
+def oblicz_przychod(self):
+    suma = 0
+
+    for obiekt in self.lista:
+        suma += obiekt.ilosc * obiekt.cena
+
+    return suma
+
+######################13. Obliczanie kosztu całkowitego jednego obiektu################
+########################Przykład: wypożyczenie sprzętu.#########################
+
+def oblicz_koszt_wypozyczenia(self, id):
+    for obiekt in self.lista:
+        if obiekt.id == id:
+            return obiekt.liczba_dni * obiekt.stawka_dzienna
+
+    return 0
+
+####################14. Liczenie obiektów o konkretnym statusie#################
+#####################Przykład: ile wypożyczeń jest aktywnych.###################
+
+def policz_statusy(self):
+    statusy = {}
+
+    for obiekt in self.lista:
+        if obiekt.status in statusy:
+            statusy[obiekt.status] += 1
+        else:
+            statusy[obiekt.status] = 1
+
+    return statusy
+
+#####################15. Zmiana statusu obiektu##############################
+######################Przykład: zmiana statusu wypożyczenia albo lotu.#######
+
+def zmien_status(self, id, nowy_status):
+    for obiekt in self.lista:
+        if obiekt.id == id:
+            obiekt.status = nowy_status
+
+##############Albo po numerze:################
+
+def zmien_status_po_nazwie(self, nazwa, nowy_status):
+    for obiekt in self.lista:
+        if obiekt.nazwa == nazwa:
+            obiekt.status = nowy_status
+
+##################16. Usuwanie obiektu z listy#################
+###################Przykład: usuń książkę, film, produkt po ID.################
+
+def usun_obiekt(self, id):
+    for obiekt in self.lista:
+        if obiekt.id == id:
+            self.lista.remove(obiekt)
+            break
+
+#####################17. Szukanie obiektu po ID albo nazwie##################
+
+def znajdz_po_id(self, id):
+    for obiekt in self.lista:
+        if obiekt.id == id:
+            return obiekt
+
+    return None
+
+################Albo:
+
+def znajdz_po_nazwie(self, nazwa):
+    for obiekt in self.lista:
+        if obiekt.nazwa == nazwa:
+            return obiekt
+
+    return None
+
+###################18. Obliczanie procentowego udziału kategorii#################
+#####################Przykład: udział gatunków filmów w całej kolekcji.############
+
+def oblicz_udzial_typow(self):
+    licznik = {}
+
+    for obiekt in self.lista:
+        if obiekt.typ in licznik:
+            licznik[obiekt.typ] += 1
+        else:
+            licznik[obiekt.typ] = 1
+
+    wynik = {}
+
+    for typ in licznik:
+        wynik[typ] = licznik[typ] / len(self.lista) * 100
+
+    return wynik
+
+##################19. Obliczanie średniego spalania auta#############
+####################To jest typowe dla zadania z flotą.###############
+
+def oblicz_srednie_spalanie(self, rejestracja):
+    tankowania_auta = []
+
+    for tankowanie in self.tankowania:
+        if tankowanie.rejestracja == rejestracja:
+            tankowania_auta.append(tankowanie)
+
+    if len(tankowania_auta) < 2:
+        return 0
+
+    tankowania_auta.sort(key=lambda x: x.stan_licznika)
+
+    pierwszy = tankowania_auta[0]
+    ostatni = tankowania_auta[-1]
+
+    przejechane_km = ostatni.stan_licznika - pierwszy.stan_licznika
+
+    if przejechane_km <= 0:
+        return 0
+
+    suma_litrow = 0
+
+    for tankowanie in tankowania_auta[1:]:
+        suma_litrow += tankowanie.litry_paliwa
+
+    return suma_litrow / przejechane_km * 100
+
+#####################20. Obliczanie kosztów według samochodu / klienta / kategorii#############
+######################Przykład: suma kosztów paliwa dla każdego auta.##########################
+
+def pobierz_koszty_per_samochod(self):
+    koszty = {}
+
+    for tankowanie in self.tankowania:
+        if tankowanie.rejestracja in koszty:
+            koszty[tankowanie.rejestracja] += tankowanie.koszt_calkowity
+        else:
+            koszty[tankowanie.rejestracja] = tankowanie.koszt_calkowity
+
+    return koszty
+
+####################21. Obliczanie wartości magazynu z ilością##########
+#####################Przykład: Produkt ma cena i ilosc.#################
+
+def oblicz_wartosc_magazynu(self):
+    suma = 0
+
+    for produkt in self.produkty:
+        suma += produkt.cena * produkt.ilosc
+
+    return suma
+
+################22. Znalezienie produktu / filmu / książki z najwyższą oceną#######
+##################Przykład: obiekt ma pole ocena.################
+
+def znajdz_najlepiej_oceniony(self):
+    if len(self.lista) == 0:
+        return None
+
+    najlepszy = self.lista[0]
+
+    for obiekt in self.lista:
+        if obiekt.ocena > najlepszy.ocena:
+            najlepszy = obiekt
+
+    return najlepszy
+
+####################23. Obliczanie średniej oceny#################
+
+def oblicz_srednia_ocene(self):
+    if len(self.lista) == 0:
+        return 0
+
+    suma = 0
+
+    for obiekt in self.lista:
+        suma += obiekt.ocena
+
+    return suma / len(self.lista)
+
+####################24. Wyszukiwanie po fragmencie nazwy#############
+#####################To jest bardzo możliwe w GUI, np. wpisujesz kawałek tytułu.#########
+
+def szukaj_po_nazwie(self, tekst):
+    wynik = []
+
+    for obiekt in self.lista:
+        if tekst.lower() in obiekt.nazwa.lower():
+            wynik.append(obiekt)
+
+    return wynik
+
+###################25. Liczenie obiektów powyżej danej ceny###############
+#####################Przykład: ile produktów kosztuje więcej niż 100 zł.##############
+
+def policz_drozsze_niz(self, cena):
+    licznik = 0
+
+    for obiekt in self.lista:
+        if obiekt.cena > cena:
+            licznik += 1
+
+    return licznik
+
+#########################26. Filtrowanie obiektów z danego przedziału cenowego################
+
+def filtruj_po_cenie(self, cena_min, cena_max):
+    wynik = []
+
+    for obiekt in self.lista:
+        if obiekt.cena >= cena_min and obiekt.cena <= cena_max:
+            wynik.append(obiekt)
+
+    return wynik
+
+################27. Obliczanie wartości tylko aktywnych / dostępnych obiektów##############
+#################Przykład: sprzęt ma status "Dostępny" albo "Wypożyczony".################
+
+def oblicz_wartosc_dostepnych(self):
+    suma = 0
+
+    for obiekt in self.lista:
+        if obiekt.status == "Dostępny":
+            suma += obiekt.cena
+
+    return suma
+
+#####################28. Obliczanie najczęściej występującej kategorii####################
+########################Przykład: jaki gatunek filmów występuje najczęściej.##############
+
+def znajdz_najczestszy_typ(self):
+    licznik = {}
+
+    for obiekt in self.lista:
+        if obiekt.typ in licznik:
+            licznik[obiekt.typ] += 1
+        else:
+            licznik[obiekt.typ] = 1
+
+    if len(licznik) == 0:
+        return None
+
+    najczestszy = None
+    najwieksza_liczba = 0
+
+    for typ in licznik:
+        if licznik[typ] > najwieksza_liczba:
+            najwieksza_liczba = licznik[typ]
+            najczestszy = typ
+
+    return najczestszy
+
+##################29. Obliczanie łącznej liczby sztuk#############
+######################Przykład: sklep albo magazyn.################
+
+def oblicz_liczbe_sztuk(self):
+    suma = 0
+
+    for produkt in self.produkty:
+        suma += produkt.ilosc
+
+    return suma
+
+###################30. Aktualizacja ceny obiektu#####################
+#####################Przykład: zmiana ceny produktu po nazwie.########
+
+def aktualizuj_cene(self, nazwa, nowa_cena):
+    for obiekt in self.lista:
+        if obiekt.nazwa == nazwa:
+            obiekt.cena = float(nowa_cena)
+
+#####################31. Sortowanie obiektów po cenie#####################
+######################To też może się pojawić, np. „posortuj od najtańszego”.#############
+
+def sortuj_po_cenie(self):
+    self.lista.sort(key=lambda obiekt: obiekt.cena)
+
+##################32. Obliczanie średniej dla każdego typu osobno#####################
+###################Przykład: średnia cena filmów dla każdego gatunku.##################
+
+def oblicz_srednia_cene_typow(self):
+    sumy = {}
+    ilosci = {}
+
+    for obiekt in self.lista:
+        if obiekt.typ in sumy:
+            sumy[obiekt.typ] += obiekt.cena
+            ilosci[obiekt.typ] += 1
+        else:
+            sumy[obiekt.typ] = obiekt.cena
+            ilosci[obiekt.typ] = 1
+
+    srednie = {}
+
+    for typ in sumy:
+        srednie[typ] = sumy[typ] / ilosci[typ]
+
+    return srednie
+
+##################33. Znalezienie obiektów starszych niż podany rok###################
+#######################Przykład: książki, filmy, auta.##########################
+
+def filtruj_starsze_niz(self, rok):
+    wynik = []
+
+    for obiekt in self.lista:
+        if obiekt.rok < rok:
+            wynik.append(obiekt)
+
+    return wynik
+
+#####################34. Obliczanie zysku########################
+#######################Przykład: produkt ma cena_sprzedazy, cena_zakupu, ilosc.#########
+
+def oblicz_zysk(self):
+    zysk = 0
+
+    for produkt in self.produkty:
+        zysk += (produkt.cena_sprzedazy - produkt.cena_zakupu) * produkt.ilosc
+
+    return zysk
+
+#################35. Sprawdzenie, czy obiekt istnieje########################
+##################Przykład: czy film o danym tytule już jest w kolekcji.######
+
+def czy_istnieje(self, nazwa):
+    for obiekt in self.lista:
+        if obiekt.nazwa == nazwa:
+            return True
+
+    return False
+
