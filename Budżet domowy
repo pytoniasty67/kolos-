@@ -1,0 +1,264 @@
+import sys
+import json
+import os
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                             QHBoxLayout, QLabel, QLineEdit, QComboBox, QSpinBox,
+                             QDoubleSpinBox, QPushButton, QTableWidget, QTableWidgetItem,
+                             QHeaderView, QMessageBox, QAbstractItemView)
+from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt
+
+# Importy Matplotlib
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+# ==============================================================================
+# WARSTWA LOGIKI I DANYCH (OOP)
+# ==============================================================================
+class Wydatek:
+    def __init__(self, id_wydatku, data, kategoria, opis, kwota, miesiac):
+        self.id = int(id_wydatku)
+        self.data = str(data)
+        self.kategoria = str(kategoria)
+        self.opis = str(opis)
+        self.kwota = float(kwota)
+        self.miesiac = str(miesiac)
+
+    def to_dict(self):
+        """Konwertuje obiekt na słownik (ułatwia zapis do JSON)"""
+        return {
+            "id": self.id, "data": self.data, "kategoria": self.kategoria,
+            "opis": self.opis, "kwota": self.kwota, "miesiac": self.miesiac
+        }
+
+class BudzetManager:
+    def __init__(self):
+        self.wydatki = []
+
+    def dodaj_wydatek(self, wydatek):
+        self.wydatki.append(wydatek)
+
+    def usun_wydatek(self, id_wydatku):
+        # Sztuczka Pythonowa: nadpisujemy listę, zostawiając te wydatki, które NIE MAJĄ podanego ID
+        self.wydatki = [w for w in self.wydatki if w.id != int(id_wydatku)]
+
+    def oblicz_sredni_wydatek_kategorii(self, kategoria):
+        kwoty = [w.kwota for w in self.wydatki if w.kategoria == kategoria]
+        if not kwoty:
+            return 0.0  # ZABEZPIECZENIE przed dzieleniem przez zero!
+        return sum(kwoty) / len(kwoty)
+
+    def pobierz_wydatki_per_kategoria(self):
+        """Zwraca słownik (Kategoria -> Suma), potrzebne do wykresu."""
+        wynik = {}
+        for w in self.wydatki:
+            # Jeśli kategorii nie ma w słowniku, przyjmuje domyślnie 0.0
+            wynik[w.kategoria] = wynik.get(w.kategoria, 0.0) + w.kwota
+        return wynik
+
+    def zapisz_baze(self, sciezka="budzet.json"):
+        dane = [w.to_dict() for w in self.wydatki]
+        with open(sciezka, 'w', encoding='utf-8') as plik:
+            json.dump(dane, plik, indent=4, ensure_ascii=False)
+
+    def wczytaj_baze(self, sciezka="budzet.json"):
+        if not os.path.exists(sciezka):
+            return # Jeśli pliku nie ma, po prostu pomiń wczytywanie
+        try:
+            with open(sciezka, 'r', encoding='utf-8') as plik:
+                dane = json.load(plik)
+                self.wydatki = []
+                for item in dane:
+                    nowy = Wydatek(item["id"], item["data"], item["kategoria"], 
+                                   item["opis"], item["kwota"], item["miesiac"])
+                    self.wydatki.append(nowy)
+        except Exception as e:
+            print(f"Błąd odczytu bazy: {e}")
+
+
+# ==============================================================================
+# WARSTWA INTERFEJSU GRAFICZNEGO (GUI) I WIZUALIZACJI
+# ==============================================================================
+class BudzetApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.manager = BudzetManager()
+        self.manager.wczytaj_baze()  # Automatyczny odczyt na starcie!
+
+        self.setWindowTitle("System Ewidencji Kosztów Domowych")
+        self.resize(1100, 650)
+        self.init_ui()
+        self.odswiez_widok()
+
+    def init_ui(self):
+        glowny_widget = QWidget()
+        self.setCentralWidget(glowny_widget)
+        layout_h = QHBoxLayout(glowny_widget) 
+
+        # --- PANEL LEWY: Formularze i kontrolki ---
+        panel_lewy = QVBoxLayout()
+        
+        self.in_id = QSpinBox()
+        self.in_id.setRange(1, 999999)
+        panel_lewy.addWidget(QLabel("ID Wydatku:"))
+        panel_lewy.addWidget(self.in_id)
+
+        self.in_data = QLineEdit()
+        self.in_data.setPlaceholderText("np. 2026-06-18")
+        panel_lewy.addWidget(QLabel("Data:"))
+        panel_lewy.addWidget(self.in_data)
+
+        self.in_kategoria = QComboBox()
+        self.in_kategoria.addItems(["Jedzenie", "Rachunki", "Rozrywka", "Transport", "Inne"])
+        panel_lewy.addWidget(QLabel("Kategoria:"))
+        panel_lewy.addWidget(self.in_kategoria)
+
+        self.in_opis = QLineEdit()
+        self.in_opis.setPlaceholderText("Krótki opis...")
+        panel_lewy.addWidget(QLabel("Opis:"))
+        panel_lewy.addWidget(self.in_opis)
+
+        self.in_kwota = QDoubleSpinBox()
+        self.in_kwota.setRange(0.01, 100000.00)
+        self.in_kwota.setDecimals(2)
+        panel_lewy.addWidget(QLabel("Kwota (PLN):"))
+        panel_lewy.addWidget(self.in_kwota)
+
+        self.in_miesiac = QComboBox()
+        self.in_miesiac.addItems(["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", 
+                                  "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"])
+        panel_lewy.addWidget(QLabel("Miesiąc:"))
+        panel_lewy.addWidget(self.in_miesiac)
+
+        self.btn_dodaj = QPushButton("Dodaj Wydatek")
+        self.btn_dodaj.clicked.connect(self.akcja_dodaj)
+        panel_lewy.addWidget(self.btn_dodaj)
+
+        # Sekcja wyszukiwania (filtrowania) i usuwania
+        panel_lewy.addWidget(QLabel("<b>Filtruj tabelę po kategorii:</b>"))
+        self.in_filtr = QLineEdit()
+        self.in_filtr.textChanged.connect(self.akcja_filtruj)
+        panel_lewy.addWidget(self.in_filtr)
+
+        self.btn_usun = QPushButton("Usuń Zaznaczony Wydatek")
+        self.btn_usun.clicked.connect(self.akcja_usun)
+        panel_lewy.addWidget(self.btn_usun)
+
+        # Informacja o średniej (zależna od klikniętego rzędu w tabeli)
+        self.lbl_srednia = QLabel("Średni wydatek w kategorii (wybierz z tabeli): -")
+        panel_lewy.addWidget(self.lbl_srednia)
+
+        panel_lewy.addStretch()
+        layout_h.addLayout(panel_lewy, stretch=1)
+
+        # --- PANEL PRAWY: Tabela i Wykres ---
+        panel_prawy = QVBoxLayout()
+
+        self.tabela = QTableWidget()
+        self.tabela.setColumnCount(6)
+        self.tabela.setHorizontalHeaderLabels(["ID", "Data", "Kategoria", "Opis", "Kwota", "Miesiąc"])
+        self.tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) # Gumowe kolumny!
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows) # Zaznaczanie całego rzędu
+        self.tabela.itemClicked.connect(self.akcja_klikniecia_tabeli)
+        panel_prawy.addWidget(self.tabela, stretch=1)
+
+        self.figure = Figure(figsize=(5, 3), dpi=100)
+        self.canvas = FigureCanvas(self.figure)
+        self.ax = self.figure.add_subplot(111)
+        panel_prawy.addWidget(self.canvas, stretch=1)
+
+        layout_h.addLayout(panel_prawy, stretch=2)
+
+
+    # ==============================================================================
+    # AKCJE (Logika przycisków i okienek)
+    # ==============================================================================
+    def akcja_dodaj(self):
+        v_id = self.in_id.value()
+        v_data = self.in_data.text()
+        v_kat = self.in_kategoria.currentText()
+        v_opis = self.in_opis.text()
+        v_kwota = self.in_kwota.value()
+        v_mies = self.in_miesiac.currentText()
+
+        if not v_data or not v_opis:
+            QMessageBox.warning(self, "Błąd", "Wypełnij datę i opis!")
+            return
+
+        nowy = Wydatek(v_id, v_data, v_kat, v_opis, v_kwota, v_mies)
+        self.manager.dodaj_wydatek(nowy)
+        self.odswiez_widok()
+        
+        self.in_id.setValue(v_id + 1)
+        self.in_data.clear()
+        self.in_opis.clear()
+
+    def akcja_usun(self):
+        rzad = self.tabela.currentRow()
+        if rzad < 0:
+            QMessageBox.warning(self, "Błąd", "Zaznacz wydatek w tabeli!")
+            return
+            
+        id_do_usuniecia = self.tabela.item(rzad, 0).text()
+        self.manager.usun_wydatek(id_do_usuniecia)
+        self.odswiez_widok()
+
+    def akcja_filtruj(self):
+        """Mechanizm błyskawicznego filtrowania na żywo"""
+        tekst = self.in_filtr.text().lower()
+        for rzad in range(self.tabela.rowCount()):
+            item_kategoria = self.tabela.item(rzad, 2)
+            if item_kategoria:
+                # Jeśli tekst filtru NIE pasuje do zawartości, ukryj wiersz
+                ukryj = tekst not in item_kategoria.text().lower()
+                self.tabela.setRowHidden(rzad, ukryj)
+
+    def akcja_klikniecia_tabeli(self):
+        """Gdy ktoś kliknie w tabelę, policz średnią dla tej kategorii"""
+        rzad = self.tabela.currentRow()
+        if rzad >= 0:
+            kategoria = self.tabela.item(rzad, 2).text()
+            srednia = self.manager.oblicz_sredni_wydatek_kategorii(kategoria)
+            self.lbl_srednia.setText(f"Średnio dla '{kategoria}': {srednia:.2f} PLN")
+
+
+    # ==============================================================================
+    # SERCE PROGRAMU (Rysowanie wykresów i wypełnianie tabeli)
+    # ==============================================================================
+    def odswiez_widok(self):
+        # 1. Odświeżenie tabeli
+        self.tabela.setRowCount(len(self.manager.wydatki))
+        for r, w in enumerate(self.manager.wydatki):
+            self.tabela.setItem(r, 0, QTableWidgetItem(str(w.id)))
+            self.tabela.setItem(r, 1, QTableWidgetItem(w.data))
+            self.tabela.setItem(r, 2, QTableWidgetItem(w.kategoria))
+            self.tabela.setItem(r, 3, QTableWidgetItem(w.opis))
+            self.tabela.setItem(r, 4, QTableWidgetItem(f"{w.kwota:.2f}"))
+            self.tabela.setItem(r, 5, QTableWidgetItem(w.miesiac))
+
+        self.akcja_filtruj() # Ważne: nakłada filtr od razu po odświeżeniu!
+
+        # 2. Odświeżenie wykresu Matplotlib
+        self.ax.clear()
+        statystyki = self.manager.pobierz_wydatki_per_kategoria()
+        if statystyki:
+            kategorie = list(statystyki.keys())
+            sumy = list(statystyki.values())
+            self.ax.bar(kategorie, sumy, color='#3b82f6')
+            self.ax.set_title("Suma wydatków według kategorii (PLN)")
+        
+        self.figure.tight_layout()
+        self.canvas.draw()
+
+    # Automatyczny Zapis (Zastępuje przycisk Zapisu)
+    def closeEvent(self, event):
+        self.manager.zapisz_baze()
+        event.accept()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    okno = BudzetApp()
+    okno.show()
+    sys.exit(app.exec_())
