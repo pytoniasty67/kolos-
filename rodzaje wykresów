@@ -1,0 +1,203 @@
+def odswiez_wykres(self):                                Początek zawsze taki sam halo halo początek taki sam zawsze
+    self.figure.clear()
+
+    wybor = self.wykres_input.currentText()
+
+    if len(self.manager.loty) == 0:
+        ax = self.figure.add_subplot(111)
+        ax.set_title("Brak danych")
+        self.canvas.draw()
+        return
+
+    linie = []
+    opoznienia = []
+    typy = []
+    statusy = []
+
+    for lot in self.manager.loty:
+        linie.append(lot.linia_lotnicza)
+        opoznienia.append(lot.opoznienie_min)
+        typy.append(lot.typ_operacji)
+        statusy.append(lot.status)
+
+
+
+1.Wykres słupkowy
+
+if wybor == "Wykres słupkowy":
+    ax = self.figure.add_subplot(111)
+
+    dane = self.manager.oblicz_srednie_opoznienie_linii()
+
+    ax.bar(dane.keys(), dane.values())
+    ax.set_title("Wykres słupkowy - średnie opóźnienie linii")
+    ax.set_xlabel("Linia lotnicza")
+    ax.set_ylabel("Średnie opóźnienie [min]")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
+
+
+
+2.Wykres słupkowy poziomy
+if wybor == "Wykres słupkowy poziomy":
+    ax = self.figure.add_subplot(111)
+
+    dane = self.manager.oblicz_srednie_opoznienie_linii()
+
+    ax.barh(list(dane.keys()), list(dane.values()))
+    ax.set_title("Wykres słupkowy poziomy - średnie opóźnienie")
+    ax.set_xlabel("Średnie opóźnienie [min]")
+    ax.set_ylabel("Linia lotnicza")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
+
+
+
+
+
+3Wykres kołowy — pie()
+if wybor == "Wykres kołowy":
+    ax = self.figure.add_subplot(111)
+
+    dane = self.manager.pobierz_statystyki_operacji()
+
+    ax.pie(dane.values(), labels=dane.keys(), autopct="%1.1f%%")
+    ax.set_title("Wykres kołowy - udział przylotów i odlotów")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
+
+
+
+
+
+4. Wykres liniowy — plot()
+if wybor == "Wykres liniowy":
+    ax = self.figure.add_subplot(111)
+
+    numery = list(range(1, len(opoznienia) + 1))
+
+    ax.plot(numery, opoznienia, marker="o")
+    ax.set_title("Wykres liniowy - zmiana opóźnień kolejnych lotów")
+    ax.set_xlabel("Numer kolejnego lotu")
+    ax.set_ylabel("Opóźnienie [min]")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
+
+
+
+
+
+
+
+5. Wykres punktowy — scatter()
+if wybor == "Wykres punktowy":
+    ax = self.figure.add_subplot(111)
+
+    numery = list(range(1, len(opoznienia) + 1))
+
+    ax.scatter(numery, opoznienia)
+    ax.set_title("Wykres punktowy - pojedyncze opóźnienia lotów")
+    ax.set_xlabel("Numer kolejnego lotu")
+    ax.set_ylabel("Opóźnienie [min]")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
+
+
+
+
+
+
+
+
+
+
+
+
+6. Histogram — hist()
+if wybor == "Histogram":
+    ax = self.figure.add_subplot(111)
+
+    ax.hist(opoznienia, bins=10)
+    ax.set_title("Histogram - rozkład opóźnień")
+    ax.set_xlabel("Opóźnienie [min]")
+    ax.set_ylabel("Liczba lotów")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
+
+
+
+
+
+
+
+7. Wykres schodkowy — step()
+if wybor == "Wykres schodkowy":
+    ax = self.figure.add_subplot(111)
+
+    numery = list(range(1, len(opoznienia) + 1))
+
+    ax.step(numery, opoznienia, where="mid")
+    ax.set_title("Wykres schodkowy - skokowe zmiany opóźnień")
+    ax.set_xlabel("Numer kolejnego lotu")
+    ax.set_ylabel("Opóźnienie [min]")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
+
+
+
+
+
+
+
+
+
+8. Wykres tabelaryczny — table()
+if wybor == "Wykres tabelaryczny":
+    ax = self.figure.add_subplot(111)
+
+    ax.axis("off")
+
+    dane = self.manager.oblicz_srednie_opoznienie_linii()
+
+    wiersze = []
+
+    for linia, srednie in dane.items():
+        wiersze.append([linia, round(srednie, 2)])
+
+    ax.table(
+        cellText=wiersze,
+        colLabels=["Linia lotnicza", "Średnie opóźnienie"],
+        loc="center"
+    )
+
+    ax.set_title("Tabela - średnie opóźnienia linii")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
+
+
+
+9. Wykres funkcji matematycznej
+if wybor == "Wykres funkcji":
+    ax = self.figure.add_subplot(111)
+
+    import numpy as np
+
+    x = np.linspace(-10, 10, 100)
+    y = x ** 2
+
+    ax.plot(x, y)
+
+    ax.set_title("Wykres funkcji y = x²")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+
+    self.figure.tight_layout()
+    self.canvas.draw()
