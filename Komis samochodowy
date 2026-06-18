@@ -1,0 +1,308 @@
+import sys
+import os
+import json
+import pandas as pd
+
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
+
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QPushButton, QTableWidget, QTableWidgetItem,
+    QFileDialog, QVBoxLayout, QWidget, QLabel, QLineEdit, QComboBox,
+    QHBoxLayout, QSpinBox, QDoubleSpinBox, QMessageBox, QHeaderView, QAbstractItemView
+)
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+# ============================================================
+# KLASA SAMOCHÓD
+# ============================================================
+
+class Samochod:
+    def __init__(self, vin, marka, model, rok_produkcji, cena_zakupu, cena_sprzedazy=0.0, status="Dostępny"):
+        self.vin = vin
+        self.marka = marka
+        self.model = model
+        self.rok_produkcji = int(rok_produkcji)
+        self.cena_zakupu = float(cena_zakupu)
+        self.cena_sprzedazy = float(cena_sprzedazy)
+        self.status = status
+
+    def oblicz_zysk(self):
+        if self.status == "Sprzedany":
+            return self.cena_sprzedazy - self.cena_zakupu
+        return 0.0
+
+    def to_dict(self):
+        return {
+            "vin": self.vin,
+            "marka": self.marka,
+            "model": self.model,
+            "rok_produkcji": self.rok_produkcji,
+            "cena_zakupu": self.cena_zakupu,
+            "cena_sprzedazy": self.cena_sprzedazy,
+            "status": self.status
+        }
+
+    @staticmethod
+    def from_dict(dane):
+        return Samochod(
+            dane["vin"], dane["marka"], dane["model"],
+            dane["rok_produkcji"], dane["cena_zakupu"],
+            dane.get("cena_sprzedazy", 0.0),
+            dane.get("status", "Dostępny")
+        )
+
+
+# ============================================================
+# KLASA BAZA KOMISU
+# ============================================================
+
+class BazaKomisu:
+    def __init__(self):
+        self.samochody = []
+
+    def dodaj_samochod(self, samochod):
+        if self.znajdz_po_vin(samochod.vin) is not None:
+            return False
+        self.samochody.append(samochod)
+        return True
+
+    def znajdz_po_vin(self, vin):
+        for samochod in self.samochody:
+            if samochod.vin == vin:
+                return samochod
+        return None
+
+    def sprzedaj_samochod(self, vin, ostateczna_cena):
+        samochod = self.znajdz_po_vin(vin)
+        if samochod is None:
+            return False
+        samochod.cena_sprzedazy = float(ostateczna_cena)
+        samochod.status = "Sprzedany"
+        return True
+
+    def oblicz_calkowity_zysk(self):
+        return sum(s.oblicz_zysk() for s in self.samochody)
+
+    def pobierz_ilosc_per_marka(self):
+        dane = {}
+        for s in self.samochody:
+            if s.status == "Dostępny":
+                dane[s.marka] = dane.get(s.marka, 0) + 1
+        return dane
+
+    def pobierz_zysk_per_marka(self):
+        dane = {}
+        for s in self.samochody:
+            if s.status == "Sprzedany":
+                dane[s.marka] = dane.get(s.marka, 0) + s.oblicz_zysk()
+        return dane
+
+    def filtruj_samochody(self, filtr):
+        if filtr == "Tylko Dostępne":
+            return [s for s in self.samochody if s.status == "Dostępny"]
+        if filtr == "Tylko Sprzedane":
+            return [s for s in self.samochody if s.status == "Sprzedany"]
+        return self.samochody
+
+    def zapisz_stan_aut(self, sciezka="komis_db.json"):
+        with open(sciezka, "w", encoding="utf-8") as plik:
+            json.dump([s.to_dict() for s in self.samochody], plik, ensure_ascii=False, indent=4)
+
+    def wczytaj_stan_aut(self, sciezka="komis_db.json"):
+        if not os.path.exists(sciezka): return
+        with open(sciezka, "r", encoding="utf-8") as plik:
+            dane = json.load(plik)
+        self.samochody = [Samochod.from_dict(w) for w in dane]
+
+    def generuj_raport_excel(self, sciezka):
+        dane = [{
+            "VIN": s.vin, "Marka": s.marka, "Model": s.model, "Rok": s.rok_produkcji,
+            "Cena Zakupu": s.cena_zakupu, "Cena Sprzedaży": s.cena_sprzedazy,
+            "Status": s.status, "Wygenerowany Zysk": s.oblicz_zysk()
+        } for s in self.samochody]
+        pd.DataFrame(dane).to_excel(sciezka, index=False)
+
+
+# ============================================================
+# GŁÓWNA APLIKACJA
+# ============================================================
+
+class KomisApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.baza = BazaKomisu()
+        self.baza.wczytaj_stan_aut()
+
+        self.setWindowTitle("System zarządzania autokomisem")
+        self.setGeometry(200, 100, 1100, 700)
+
+        # UI Elements
+        self.vin_input = QLineEdit();
+        self.vin_input.setPlaceholderText("VIN")
+        self.marka_input = QLineEdit();
+        self.marka_input.setPlaceholderText("Marka")
+        self.model_input = QLineEdit();
+        self.model_input.setPlaceholderText("Model")
+        self.rok_input = QSpinBox();
+        self.rok_input.setRange(1950, 2100);
+        self.rok_input.setValue(2020)
+        self.cena_zakupu_input = QDoubleSpinBox();
+        self.cena_zakupu_input.setRange(0, 10000000);
+        self.cena_zakupu_input.setSuffix(" PLN")
+        self.cena_sprzedazy_input = QDoubleSpinBox();
+        self.cena_sprzedazy_input.setRange(0, 10000000);
+        self.cena_sprzedazy_input.setSuffix(" PLN")
+
+        self.przycisk_dodaj = QPushButton("Dodaj samochód")
+        self.przycisk_dodaj.clicked.connect(self.dodaj_samochod)
+        self.przycisk_sprzedaj = QPushButton("Zarejestruj sprzedaż")
+        self.przycisk_sprzedaj.clicked.connect(self.sprzedaj_samochod)
+        self.przycisk_zapisz = QPushButton("Zapisz JSON")
+        self.przycisk_zapisz.clicked.connect(self.zapisz_json)
+        self.przycisk_wczytaj = QPushButton("Wczytaj JSON")
+        self.przycisk_wczytaj.clicked.connect(self.wczytaj_json)
+        self.przycisk_raport = QPushButton("Generuj raport Excel")
+        self.przycisk_raport.clicked.connect(self.generuj_raport)
+
+        self.filtr_input = QComboBox()
+        self.filtr_input.addItems(["Wszystkie", "Tylko Dostępne", "Tylko Sprzedane"])
+        self.filtr_input.currentIndexChanged.connect(self.odswiez_widok)
+
+        self.wykres_input = QComboBox()
+        self.wykres_input.addItems(["Liczba dostępnych aut według marki", "Zysk według marki"])
+        self.wykres_input.currentIndexChanged.connect(self.odswiez_wykres)
+
+        self.tabela = QTableWidget()
+        self.tabela.setColumnCount(8)
+        self.tabela.setHorizontalHeaderLabels(
+            ["VIN", "Marka", "Model", "Rok", "Cena Zakupu", "Cena Sprzedaży", "Status", "Zysk"])
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabela.cellClicked.connect(self.wczytaj_dane_z_tabeli)
+
+        self.podsumowanie_label = QLabel("Brak danych")
+        self.figure = Figure()
+        self.canvas = FigureCanvas(self.figure)
+
+        # Layouts
+        l1 = QHBoxLayout();
+        l1.addWidget(self.vin_input);
+        l1.addWidget(self.marka_input);
+        l1.addWidget(self.model_input);
+        l1.addWidget(QLabel("Rok:"));
+        l1.addWidget(self.rok_input)
+        l2 = QHBoxLayout();
+        l2.addWidget(QLabel("Zakup:"));
+        l2.addWidget(self.cena_zakupu_input);
+        l2.addWidget(QLabel("Sprzedaż:"));
+        l2.addWidget(self.cena_sprzedazy_input);
+        l2.addWidget(self.przycisk_dodaj);
+        l2.addWidget(self.przycisk_sprzedaj)
+        l3 = QHBoxLayout();
+        l3.addWidget(self.przycisk_zapisz);
+        l3.addWidget(self.przycisk_wczytaj);
+        l3.addWidget(self.przycisk_raport);
+        l3.addWidget(QLabel("Filtr:"));
+        l3.addWidget(self.filtr_input);
+        l3.addWidget(QLabel("Wykres:"));
+        l3.addWidget(self.wykres_input)
+
+        layout = QVBoxLayout()
+        layout.addLayout(l1);
+        layout.addLayout(l2);
+        layout.addLayout(l3);
+        layout.addWidget(self.tabela);
+        layout.addWidget(self.podsumowanie_label);
+        layout.addWidget(self.canvas)
+
+        kontener = QWidget()
+        kontener.setLayout(layout)
+        self.setCentralWidget(kontener)
+
+        self.odswiez_widok()
+
+    def dodaj_samochod(self):
+        if not self.vin_input.text() or not self.marka_input.text():
+            QMessageBox.warning(self, "Błąd", "Uzupełnij VIN i markę.")
+            return
+
+        samochod = Samochod(self.vin_input.text(), self.marka_input.text(), self.model_input.text(),
+                            self.rok_input.value(), self.cena_zakupu_input.value(), self.cena_sprzedazy_input.value())
+
+        if not self.baza.dodaj_samochod(samochod):
+            QMessageBox.warning(self, "Błąd", "VIN już istnieje.")
+            return
+
+        self.baza.zapisz_stan_aut()
+        self.odswiez_widok()
+        self.wyczysc_formularz()
+
+    def sprzedaj_samochod(self):
+        wiersz = self.tabela.currentRow()
+        if wiersz < 0: return
+        vin = self.tabela.item(wiersz, 0).text()
+        if self.baza.sprzedaj_samochod(vin, self.cena_sprzedazy_input.value()):
+            self.baza.zapisz_stan_aut()
+            self.odswiez_widok()
+
+    def wczytaj_dane_z_tabeli(self, wiersz, kolumna):
+        self.vin_input.setText(self.tabela.item(wiersz, 0).text())
+        self.marka_input.setText(self.tabela.item(wiersz, 1).text())
+        self.model_input.setText(self.tabela.item(wiersz, 2).text())
+        self.rok_input.setValue(int(self.tabela.item(wiersz, 3).text()))
+        self.cena_zakupu_input.setValue(float(self.tabela.item(wiersz, 4).text()))
+        self.cena_sprzedazy_input.setValue(float(self.tabela.item(wiersz, 5).text()))
+
+    def wyczysc_formularz(self):
+        self.vin_input.clear();
+        self.marka_input.clear();
+        self.model_input.clear()
+
+    def odswiez_widok(self):
+        self.odswiez_tabele();
+        self.odswiez_wykres()
+
+    def odswiez_tabele(self):
+        samochody = self.baza.filtruj_samochody(self.filtr_input.currentText())
+        self.tabela.setRowCount(len(samochody))
+        for i, s in enumerate(samochody):
+            dane = [s.vin, s.marka, s.model, str(s.rok_produkcji), f"{s.cena_zakupu:.2f}", f"{s.cena_sprzedazy:.2f}",
+                    s.status, f"{s.oblicz_zysk():.2f}"]
+            for col, val in enumerate(dane):
+                item = QTableWidgetItem(val);
+                item.setTextAlignment(Qt.AlignCenter)
+                if s.status == "Sprzedany": item.setBackground(QColor(180, 255, 180))
+                self.tabela.setItem(i, col, item)
+        self.tabela.resizeColumnsToContents()
+        self.podsumowanie_label.setText(
+            f"Liczba aut: {len(self.baza.samochody)} | Zysk całkowity: {self.baza.oblicz_calkowity_zysk():.2f} PLN")
+
+    def odswiez_wykres(self):
+        self.figure.clear();
+        ax = self.figure.add_subplot(111)
+        dane = self.baza.pobierz_ilosc_per_marka() if self.wykres_input.currentText() == "Liczba dostępnych aut według marki" else self.baza.pobierz_zysk_per_marka()
+        if dane:
+            ax.bar(dane.keys(), dane.values())
+        self.canvas.draw()
+
+    def zapisz_json(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Zapisz", "", "JSON (*.json)")
+        if path: self.baza.zapisz_stan_aut(path)
+
+    def wczytaj_json(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Wczytaj", "", "JSON (*.json)")
+        if path: self.baza.wczytaj_stan_aut(path); self.odswiez_widok()
+
+    def generuj_raport(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Raport", "", "Excel (*.xlsx)")
+        if path: self.baza.generuj_raport_excel(path)
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    okno = KomisApp()
+    okno.show()
+    sys.exit(app.exec_())
