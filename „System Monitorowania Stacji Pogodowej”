@@ -1,0 +1,198 @@
+import json
+import os
+import sys
+import random
+from datetime import datetime
+
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+                             QTableWidget, QTableWidgetItem, QPushButton,
+                             QComboBox, QSpinBox, QDoubleSpinBox,
+                             QAbstractItemView, QHeaderView)
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+# --- CZĘŚĆ 1: LOGIKA (OOP) ---
+class OdczytPogodowy:
+    def __init__(self, timestamp, miasto, temperatura, wilgotnosc, pm25):
+        self.timestamp = timestamp
+        self.miasto = miasto
+        self.temperatura = float(temperatura)
+        self.wilgotnosc = int(wilgotnosc)
+        self.pm25 = int(pm25)
+
+
+class BazaPogodowa:
+    def __init__(self):
+        self.lista_odczytow = []
+
+    def dodaj_odczyt(self, odczyt):
+        self.lista_odczytow.append(odczyt)
+
+    def wyczysc_dane(self):
+        self.lista_odczytow.clear()
+
+    def pobierz_historie_miasta(self, nazwa_miasta):
+        # Filtrowanie: zostawia odczyty tylko dla konkretnego miasta
+        return [o for o in self.lista_odczytow if o.miasto == nazwa_miasta]
+
+    def oblicz_srednie(self, nazwa_miasta):
+        historia = self.pobierz_historie_miasta(nazwa_miasta)
+        if not historia:
+            return 0.0, 0.0
+
+        suma_temp = sum(o.temperatura for o in historia)
+        suma_wilg = sum(o.wilgotnosc for o in historia)
+        ilosc = len(historia)
+
+        return round(suma_temp / ilosc, 2), round(suma_wilg / ilosc, 2)
+
+    # --- CZĘŚĆ 2: TRWAŁOŚĆ DANYCH (JSON) ---
+    def zapisz_baze(self, sciezka="pogoda_data.json"):
+        with open(sciezka, 'w', encoding='utf-8') as f:
+            json.dump([o.__dict__ for o in self.lista_odczytow], f, indent=4)
+
+    def wczytaj_baze(self, sciezka="pogoda_data.json"):
+        if os.path.exists(sciezka):
+            with open(sciezka, 'r', encoding='utf-8') as f:
+                dane = json.load(f)
+                self.lista_odczytow = [OdczytPogodowy(d['timestamp'], d['miasto'], d['temperatura'],
+                                                      d['wilgotnosc'], d['pm25']) for d in dane]
+
+
+# --- CZĘŚĆ 3: INTERFEJS (PyQt5) i WYKRES LINIOWY ---
+class OknoPogody(QWidget):
+    def __init__(self, baza):
+        super().__init__()
+        self.baza = baza
+        self.setWindowTitle("System Monitorowania Stacji Pogodowej")
+        self.resize(1100, 600)
+
+        layout = QVBoxLayout()
+
+        # --- Formularz wprowadzania ---
+        form_layout = QHBoxLayout()
+
+        self.combo_miasto = QComboBox()
+        self.combo_miasto.addItems(["Warszawa", "Kraków", "Gdańsk", "Wrocław"])
+        # Magia: Kiedy zmienisz miasto na liście, program sam odświeży tabelę i wykres!
+        self.combo_miasto.currentTextChanged.connect(self.odswiez_gui)
+
+        self.in_temp = QDoubleSpinBox()
+        self.in_temp.setPrefix("Temp: ")
+        self.in_temp.setSuffix(" °C")
+        self.in_temp.setRange(-50.0, 50.0)
+
+        self.in_wilg = QSpinBox()
+        self.in_wilg.setPrefix("Wilg: ")
+        self.in_wilg.setSuffix(" %")
+        self.in_wilg.setRange(0, 100)
+
+        self.in_pm25 = QSpinBox()
+        self.in_pm25.setPrefix("PM2.5: ")
+        self.in_pm25.setMaximum(1000)
+
+        btn_dodaj = QPushButton("Dodaj Ręcznie")
+        btn_dodaj.clicked.connect(self.dodaj_recznie)
+
+        btn_losuj = QPushButton("🎲 Generuj Losowy Pomiar")
+        btn_losuj.setStyleSheet("background-color: #ffd700; font-weight: bold;")
+        btn_losuj.clicked.connect(self.generuj_losowy)
+
+        btn_czysc = QPushButton("🗑️ Wyczyść Wszystko")
+        btn_czysc.setStyleSheet("background-color: #ffcccc;")
+        btn_czysc.clicked.connect(self.wyczysc_baze)
+
+        for w in [self.combo_miasto, self.in_temp, self.in_wilg, self.in_pm25, btn_dodaj, btn_losuj, btn_czysc]:
+            form_layout.addWidget(w)
+        layout.addLayout(form_layout)
+
+        # --- Tabela i Wykres ---
+        body_layout = QHBoxLayout()
+
+        self.tabela = QTableWidget(0, 5)
+        self.tabela.setHorizontalHeaderLabels(["Czas", "Miasto", "Temp (°C)", "Wilgotność (%)", "PM2.5"])
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Gumowe kolumny
+        body_layout.addWidget(self.tabela, 2)
+
+        self.canvas = FigureCanvas(Figure())
+        body_layout.addWidget(self.canvas, 1)
+
+        layout.addLayout(body_layout)
+        self.setLayout(layout)
+
+        # Pierwsze uruchomienie GUI
+        self.odswiez_gui()
+
+    def dodaj_recznie(self):
+        teraz = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        nowy = OdczytPogodowy(teraz, self.combo_miasto.currentText(), self.in_temp.value(),
+                              self.in_wilg.value(), self.in_pm25.value())
+        self.baza.dodaj_odczyt(nowy)
+        self.odswiez_gui()
+
+    def generuj_losowy(self):
+        teraz = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Generujemy realistyczne liczby za pomocą modułu random
+        losowa_temp = round(random.uniform(-5.0, 30.0), 1)
+        losowa_wilg = random.randint(30, 90)
+        losowy_pm25 = random.randint(10, 150)
+
+        nowy = OdczytPogodowy(teraz, self.combo_miasto.currentText(), losowa_temp, losowa_wilg, losowy_pm25)
+        self.baza.dodaj_odczyt(nowy)
+        self.odswiez_gui()
+
+    def wyczysc_baze(self):
+        self.baza.wyczysc_dane()
+        self.odswiez_gui()
+
+    def odswiez_gui(self):
+        wybrane_miasto = self.combo_miasto.currentText()
+        # Wyciągamy dane TYLKO dla miasta wybranego w liście rozwijanej
+        historia_miasta = self.baza.pobierz_historie_miasta(wybrane_miasto)
+
+        # 1. Rysowanie tabeli
+        self.tabela.setRowCount(len(historia_miasta))
+        for r, o in enumerate(historia_miasta):
+            dane_do_wiersza = [o.timestamp.split()[1], o.miasto, str(o.temperatura), str(o.wilgotnosc), str(o.pm25)]
+            for c, wartosc in enumerate(dane_do_wiersza):
+                self.tabela.setItem(r, c, QTableWidgetItem(wartosc))
+
+        # 2. Rysowanie Wykresu Liniowego
+        ax = self.canvas.figure.subplots()
+        ax.clear()
+
+        # Żeby narysować linię, potrzebujemy co najmniej dwóch punktów pomiarowych
+        if len(historia_miasta) >= 2:
+            czasy = [o.timestamp.split()[1] for o in
+                     historia_miasta]  # Oś X: wycinamy tylko godzinę (żeby tekst się zmieścił)
+            temperatury = [o.temperatura for o in historia_miasta]  # Oś Y: temperatura
+
+            # plot rysuje linię, marker='o' dodaje kropki na załamaniach
+            ax.plot(czasy, temperatury, color='blue', marker='o', linestyle='-')
+
+            sr_temp, _ = self.baza.oblicz_srednie(wybrane_miasto)
+            ax.set_title(f'Trend Temp. w {wybrane_miasto} (Średnia: {sr_temp}°C)')
+            ax.set_ylabel('Temperatura (°C)')
+            ax.tick_params(axis='x', rotation=45)  # Pochylamy tekst na osi X
+        else:
+            ax.text(0.5, 0.5, "Wygeneruj min. 2 pomiary dla tego miasta",
+                    ha='center', va='center')
+
+        self.canvas.figure.tight_layout()
+        self.canvas.draw()
+
+
+if __name__ == "__main__":
+    stacja = BazaPogodowa()
+    stacja.wczytaj_baze()
+
+    app = QApplication(sys.argv)
+    okno = OknoPogody(stacja)
+    okno.show()
+
+    app.exec_()
+    # Zapis przy wyjściu krzyżykiem
+    stacja.zapisz_baze()
