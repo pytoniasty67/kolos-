@@ -1,0 +1,219 @@
+import json
+import os
+import sys
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+                             QTableWidget, QTableWidgetItem, QPushButton,
+                             QLineEdit, QSpinBox, QDoubleSpinBox, QLabel,
+                             QMessageBox, QAbstractItemView, QHeaderView)
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+# --- CZĘŚĆ 1: LOGIKA (OOP) ---
+class Tankowanie:
+    def __init__(self, id_tank, rejestracja, data, stan_licznika, litry, koszt):
+        self.id = int(id_tank)
+        self.rejestracja = str(rejestracja).upper()
+        self.data = str(data)
+        self.stan_licznika = int(stan_licznika)
+        self.litry_paliwa = float(litry)
+        self.koszt_calkowity = float(koszt)
+
+
+class FlotaManager:
+    def __init__(self):
+        self.lista_tankowan = []
+
+    def dodaj_tankowanie(self, tankowanie):
+        self.lista_tankowan.append(tankowanie)
+
+    def oblicz_srednie_spalanie(self, nr_rejestracyjny):
+        # 1. Filtrujemy tankowania tylko dla wybranego auta
+        tankowania_auta = [t for t in self.lista_tankowan if t.rejestracja == nr_rejestracyjny]
+
+        # 2. Muszą być minimum 2 tankowania, żeby zmierzyć pokonany dystans
+        if len(tankowania_auta) < 2:
+            return 0.0
+
+        min_przebieg = min(t.stan_licznika for t in tankowania_auta)
+        max_przebieg = max(t.stan_licznika for t in tankowania_auta)
+        dystans = max_przebieg - min_przebieg
+
+        # Zabezpieczenie przed błędem dzielenia przez zero
+        if dystans <= 0: return 0.0
+
+        suma_litrow = sum(t.litry_paliwa for t in tankowania_auta)
+
+        # Wzór na spalanie na 100km
+        spalanie = (suma_litrow / dystans) * 100
+        return round(spalanie, 2)
+
+    def pobierz_koszty_per_samochod(self):
+        koszty = {}
+        for t in self.lista_tankowan:
+            koszty[t.rejestracja] = koszty.get(t.rejestracja, 0.0) + t.koszt_calkowity
+        return koszty
+
+    # --- CZĘŚĆ 2: TRWAŁOŚĆ DANYCH (JSON) ---
+    def zapisz_baze(self, sciezka="flota.json"):
+        with open(sciezka, 'w', encoding='utf-8') as f:
+            json.dump([t.__dict__ for t in self.lista_tankowan], f, indent=4)
+
+    def wczytaj_baze(self, sciezka="flota.json"):
+        if os.path.exists(sciezka):
+            with open(sciezka, 'r', encoding='utf-8') as f:
+                dane = json.load(f)
+                self.lista_tankowan = [Tankowanie(d['id'], d['rejestracja'], d['data'],
+                                                  d['stan_licznika'], d['litry_paliwa'], d['koszt_calkowity']) for d in
+                                       dane]
+
+
+# --- CZĘŚĆ 3: INTERFEJS (PyQt5) i WYKRESY ---
+class OknoFloty(QWidget):
+    def __init__(self, manager):
+        super().__init__()
+        self.m = manager
+        self.setWindowTitle("Panel Managera Floty Pojazdów")
+        self.resize(1100, 600)
+
+        layout = QVBoxLayout()
+
+        # --- Formularz wprowadzania ---
+        form_layout = QHBoxLayout()
+        self.in_id = QSpinBox()
+        self.in_id.setPrefix("ID: ")
+        self.in_id.setMaximum(9999)
+
+        self.in_reg = QLineEdit()
+        self.in_reg.setPlaceholderText("Rejestracja (np. WAW123)")
+
+        self.in_data = QLineEdit()
+        self.in_data.setPlaceholderText("Data (DD-MM-YYYY)")
+
+        self.in_przebieg = QSpinBox()
+        self.in_przebieg.setPrefix("Przebieg: ")
+        self.in_przebieg.setSuffix(" km")
+        self.in_przebieg.setMaximum(999999)
+
+        self.in_litry = QDoubleSpinBox()
+        self.in_litry.setPrefix("Paliwo: ")
+        self.in_litry.setSuffix(" L")
+        self.in_litry.setMaximum(500.0)
+
+        self.in_koszt = QDoubleSpinBox()
+        self.in_koszt.setPrefix("Koszt: ")
+        self.in_koszt.setSuffix(" PLN")
+        self.in_koszt.setMaximum(5000.0)
+
+        btn_dodaj = QPushButton("Dodaj Tankowanie")
+        btn_dodaj.setStyleSheet("background-color: lightblue; font-weight: bold;")
+        btn_dodaj.clicked.connect(self.dodaj_tankowanie)
+
+        for w in [self.in_id, self.in_reg, self.in_data, self.in_przebieg, self.in_litry, self.in_koszt, btn_dodaj]:
+            form_layout.addWidget(w)
+        layout.addLayout(form_layout)
+
+        # --- Filtrowanie ---
+        filtr_layout = QHBoxLayout()
+        filtr_layout.addWidget(QLabel("🔍 Filtruj po rejestracji:"))
+        self.in_filtr = QLineEdit()
+        self.in_filtr.setPlaceholderText("Wpisz numer rejestracyjny...")
+        # Sygnał: wywołaj funkcję za każdym razem, gdy użytkownik wpisze literkę
+        self.in_filtr.textChanged.connect(self.filtruj_tabele)
+        filtr_layout.addWidget(self.in_filtr)
+        layout.addLayout(filtr_layout)
+
+        # --- Tabela i Wykres ---
+        body_layout = QHBoxLayout()
+
+        self.tabela = QTableWidget(0, 6)
+        self.tabela.setHorizontalHeaderLabels(["ID", "Rejestracja", "Data", "Przebieg (km)", "Litrów", "Koszt (PLN)"])
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Gumowe kolumny
+        body_layout.addWidget(self.tabela, 2)
+
+        self.canvas = FigureCanvas(Figure())
+        body_layout.addWidget(self.canvas, 1)
+
+        layout.addLayout(body_layout)
+        self.setLayout(layout)
+
+        # Inicjalizacja widoku
+        self.odswiez_gui()
+
+    def dodaj_tankowanie(self):
+        reg = self.in_reg.text().strip()
+        data = self.in_data.text().strip()
+        if not reg or not data:
+            QMessageBox.warning(self, "Błąd", "Rejestracja i Data są wymagane!")
+            return
+
+        nowe = Tankowanie(self.in_id.value(), reg, data, self.in_przebieg.value(),
+                          self.in_litry.value(), self.in_koszt.value())
+        self.m.dodaj_tankowanie(nowe)
+        self.odswiez_gui()
+
+        # Czyszczenie formularza po dodaniu
+        self.in_id.setValue(self.in_id.value() + 1)  # Auto-inkrementacja ID
+        self.in_reg.clear()
+        self.in_litry.setValue(0)
+        self.in_koszt.setValue(0)
+
+    def filtruj_tabele(self):
+        szukany_tekst = self.in_filtr.text().upper()
+        # Przelatujemy przez wszystkie wiersze i chowamy te, które nie pasują
+        for rzad in range(self.tabela.rowCount()):
+            rejestracja_w_tabeli = self.tabela.item(rzad, 1).text().upper()
+            if szukany_tekst in rejestracja_w_tabeli:
+                self.tabela.setRowHidden(rzad, False)  # Pokaż
+            else:
+                self.tabela.setRowHidden(rzad, True)  # Ukryj
+
+    def odswiez_gui(self):
+        # 1. Rysowanie tabeli
+        self.tabela.setRowCount(len(self.m.lista_tankowan))
+        for r, t in enumerate(self.m.lista_tankowan):
+            dane_do_wiersza = [str(t.id), t.rejestracja, t.data, str(t.stan_licznika), str(t.litry_paliwa),
+                               str(t.koszt_calkowity)]
+            for c, wartosc in enumerate(dane_do_wiersza):
+                self.tabela.setItem(r, c, QTableWidgetItem(wartosc))
+
+        # Upewniamy się, że po odświeżeniu filtr nadal działa
+        self.filtruj_tabele()
+
+        # 2. Rysowanie Wykresu ze średnim spalaniem
+        ax = self.canvas.figure.subplots()
+        ax.clear()
+
+        # Zbieramy unikalne auta i ich spalanie
+        dane_wykresu = {}
+        unikalne_rejestracje = set(t.rejestracja for t in self.m.lista_tankowan)
+
+        for reg in unikalne_rejestracje:
+            spalanie = self.m.oblicz_srednie_spalanie(reg)
+            if spalanie > 0:  # Rysujemy tylko te auta, które mają obliczone spalanie
+                dane_wykresu[reg] = spalanie
+
+        if dane_wykresu:
+            ax.bar(list(dane_wykresu.keys()), list(dane_wykresu.values()), color='coral')
+            ax.set_title('Średnie spalanie (l/100km)')
+            ax.set_ylabel('L/100km')
+        else:
+            ax.text(0.5, 0.5, "Za mało danych\n(potrzebne min. 2 tankowania auta)",
+                    ha='center', va='center')
+
+        self.canvas.draw()
+
+
+if __name__ == "__main__":
+    flota = FlotaManager()
+    flota.wczytaj_baze()
+
+    app = QApplication(sys.argv)
+    okno = OknoFloty(flota)
+    okno.show()
+
+    app.exec_()
+    # Zapis odpali się automatycznie gdy zamkniesz okno krzyżykiem
+    flota.zapisz_baze()
