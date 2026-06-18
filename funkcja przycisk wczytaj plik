@@ -1,0 +1,62 @@
+   def wczytaj_plik(self):
+        sciezka, _ = QFileDialog.getOpenFileName(
+            self,
+            "Wczytaj plik Excel",
+            "",
+            "Pliki Excel (*.xlsx)"
+        )
+
+        if sciezka:
+            try:
+                self.manager.wczytaj_z_excela(sciezka)
+                self.odswiez_tabele()
+                self.odswiez_wykres()
+                self.komunikat_label.setText("Wczytano plik Excel.")
+            except Exception:
+                self.komunikat_label.setText("Błąd wczytywania pliku. Sprawdź nazwy kolumn.")
+
+
+
+Ten fragment odpowiada za wczytanie pliku Excel do programu po kliknięciu przycisku „Wczytaj Excel”.
+
+def wczytaj_plik(self):
+      Tworzysz metodę wczytaj_plik.
+      Ona uruchamia się wtedy, gdy klikniesz przycisk
+      
+sciezka, _ = QFileDialog.getOpenFileName(
+    self,
+    "Wczytaj plik Excel",
+    "",
+    "Pliki Excel (*.xlsx)"
+)
+      Tutaj otwiera się okno wyboru pliku.
+      Użytkownik może wybrać plik Excel z komputera.
+      sciezka zapisuje miejsce wybranego pliku
+if sciezka:
+      Program sprawdza, czy użytkownik naprawdę wybrał plik.
+      Jeśli użytkownik kliknie „Anuluj”, to sciezka będzie pusta i program nic nie zrobi.
+try:
+      Program próbuje wykonać wczytanie pliku.
+      Dajemy try, bo może pojawić się błąd, np.:
+      plik ma złe nazwy kolumn,
+      plik jest uszkodzony,
+      plik nie jest poprawnym Excelem,
+      brakuje wymaganych danych.
+self.manager.wczytaj_z_excela(sciezka)
+      Tutaj program przekazuje ścieżkę pliku do managera.
+      Manager wczytuje Excela i tworzy z niego obiekty Ksiazka
+self.odswiez_tabele()
+      Po wczytaniu danych program odświeża tabelę.
+      Dzięki temu książki z Excela pojawią się w tabeli w oknie aplikacji.
+self.odswiez_wykres()
+      Program odświeża wykres.
+      Dzięki temu wykres pokazuje aktualne dane z wczytanego pliku.
+self.komunikat_label.setText("Wczytano plik Excel.")
+      Program pokazuje komunikat, że plik został poprawnie wczytany.
+except Exception:
+      Jeśli podczas wczytywania wystąpi jakikolwiek błąd, program przejdzie tutaj.
+self.komunikat_label.setText("Błąd wczytywania pliku. Sprawdź nazwy kolumn.")
+      Program pokaże komunikat o błędzie.
+      Najczęstszy błąd to złe nazwy kolumn w Excelu.
+      Excel musi mieć takie kolumny:
+      tytul | autor | gatunek | rok_wydania | cena
