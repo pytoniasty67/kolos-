@@ -201,6 +201,22 @@ def zmien_status_po_nazwie(self, nazwa, nowy_status):
         if obiekt.nazwa == nazwa:
             obiekt.status = nowy_status
 
+
+////
+
+
+
+
+
+////
+
+
+
+
+
+
+
+
 ##################16. Usuwanie obiektu z listy#################
 ###################Przykład: usuń książkę, film, produkt po ID.################
 
