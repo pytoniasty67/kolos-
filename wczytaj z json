@@ -1,0 +1,67 @@
+PAMIETAJ ZE W ZAPISIE / WCZYTYWANIU PLIKU JSON NALEZY UZYC IMPORTU ,,import json,,
+def wczytaj_baze(self, sciezka):
+        self.czysc_dane()
+
+        try:
+            with open(sciezka, "r", encoding="utf-8") as plik:
+                dane = json.load(plik)
+
+            for element in dane:
+                tankowanie = Tankowanie(
+                    element["id"],
+                    element["rejestracja"],
+                    element["data"],
+                    element["stan_licznika"],
+                    element["litry_paliwa"],
+                    element["koszt_calkowity"]
+                )
+
+                self.dodaj_tankowanie(tankowanie)
+
+        except FileNotFoundError:
+            pass
+
+def wczytaj_baze(self, sciezka):
+      Tworzysz funkcję/metodę o nazwie wczytaj_baze.
+      Ona służy do wczytania danych z pliku JSON.
+      sciezka oznacza nazwę albo miejsce pliku
+self.czysc_dane()
+      Tutaj program usuwa stare dane z listy tankowań.
+      Czyli jeśli w programie były już jakieś tankowania, to najpierw są usuwane.
+      Żeby po wczytaniu pliku dane się nie zdublowały.
+try:
+      try oznacza: spróbuj wykonać ten kod.
+      Używa się tego, bo może wystąpić błąd, np. plik flota.json jeszcze nie istnieje.
+      Dzięki try program się nie wyłączy od razu, tylko może przejść do except.\
+with open(sciezka, "r", encoding="utf-8") as plik:
+      Tutaj program otwiera plik.
+      open() służy do otwierania plików.
+      sciezka to nazwa pliku.
+      "r" oznacza read, czyli odczyt.
+      Czyli program otwiera plik tylko po to, żeby z niego czytać.
+      encoding="utf-8" oznacza, że program dobrze obsłuży polskie znaki, np. ł, ą, ę.
+      as plik oznacza, że w dalszej części ten otwarty plik będzie nazwany plik.
+dane = json.load(plik)
+      Tutaj program wczytuje dane z pliku JSON.
+      json.load(plik) odczytuje zawartość pliku i zamienia ją na dane Pythona.
+for element in dane:
+      Tutaj program przechodzi po każdym elemencie z pliku.
+      Jeden element oznacza jedno tankowanie.
+      Jeśli w pliku są 3 tankowania, pętla wykona się 3 razy.
+tankowanie = Tankowanie(
+    element["id"],
+    element["rejestracja"],
+    element["data"],
+    element["stan_licznika"],
+    element["litry_paliwa"],
+    element["koszt_calkowity"]
+)
+      Tutaj program tworzy nowy obiekt Tankowanie.
+      Czyli bierze dane z pliku i przekazuje je do klasy Tankowanie
+self.dodaj_tankowanie(tankowanie)
+      Tutaj program dodaje utworzone tankowanie do listy tankowań.
+      Czyli każde tankowanie z pliku JSON trafia z powrotem do programu.
+except FileNotFoundError:
+    pass
+      FileNotFoundError to błąd, który pojawia się wtedy, gdy program próbuje otworzyć plik, którego nie ma.
+      pass oznacza: przejdź dalej, nie rób nic.
