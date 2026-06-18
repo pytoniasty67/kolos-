@@ -1,19 +1,24 @@
 import json
 import os
 import sys
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QTableWidget, QTableWidgetItem, QPushButton,
-                             QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QLabel, QMessageBox, QAbstractItemView)
-from PyQt6.QtGui import QColor
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+                             QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
+                             QMessageBox, QAbstractItemView, QHeaderView)  # <-- dodano QHeaderView
+from PyQt5.QtGui import QColor
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 
 # --- LOGIKA ---
 class ProceduraObslugi:
     def __init__(self, id_z, reg, usluga, czas, koszt):
-        self.id_zadania, self.rejestracja_samolotu = id_z, reg
-        self.nazwa_uslugi, self.czas_trwania_min, self.koszt_uslugi = usluga, czas, koszt
+        self.id_zadania = id_z
+        self.rejestracja_samolotu = reg
+        self.nazwa_uslugi = usluga
+        self.czas_trwania_min = czas
+        self.koszt_uslugi = koszt
         self.status = "Oczekuje"
 
 
@@ -26,25 +31,27 @@ class MenedzerPlyty:
 
     def zmien_status(self, id_z, s):
         for z in self.lista_zadan:
-            if z.id_zadania == id_z: z.status = s
+            if z.id_zadania == id_z:
+                z.status = s
 
     def pobierz_czasy(self):
         czasy = {}
-        for z in self.lista_zadan: czasy[z.rejestracja_samolotu] = czasy.get(z.rejestracja_samolotu,
-                                                                             0) + z.czas_trwania_min
+        for z in self.lista_zadan:
+            czasy[z.rejestracja_samolotu] = czasy.get(z.rejestracja_samolotu, 0) + z.czas_trwania_min
         return czasy
 
     def zapisz(self):
-        with open("ground_handling.json", 'w') as f:
-            json.dump([z.__dict__ for z in self.lista_zadan], f)
+        with open("ground_handling.json", 'w', encoding='utf-8') as f:
+            json.dump([z.__dict__ for z in self.lista_zadan], f, indent=4)
 
     def wczytaj(self):
         if os.path.exists("ground_handling.json"):
-            with open("ground_handling.json", 'r') as f:
+            with open("ground_handling.json", 'r', encoding='utf-8') as f:
                 dane = json.load(f)
                 self.lista_zadan = [ProceduraObslugi(d['id_zadania'], d['rejestracja_samolotu'], d['nazwa_uslugi'],
                                                      d['czas_trwania_min'], d['koszt_uslugi']) for d in dane]
-                for i, z in enumerate(self.lista_zadan): z.status = dane[i]['status']
+                for i, z in enumerate(self.lista_zadan):
+                    z.status = dane[i]['status']
 
 
 # --- GUI ---
@@ -53,40 +60,79 @@ class Okno(QWidget):
         super().__init__()
         self.m = m
         self.resize(1000, 600)
+        self.setWindowTitle("Koordynator Płyty Lotniska")
+
         layout = QVBoxLayout()
 
         # Formularz
         h = QHBoxLayout()
-        self.i1, self.i2 = QLineEdit(placeholderText="ID"), QLineEdit(placeholderText="Reg")
+        self.i1 = QLineEdit()
+        self.i1.setPlaceholderText("ID")
+        self.i2 = QLineEdit()
+        self.i2.setPlaceholderText("Reg")
+
         self.i3 = QComboBox()
         self.i3.addItems(["Tankowanie", "Catering", "Bagaże"])
-        self.i4, self.i5 = QSpinBox(prefix="Czas: "), QDoubleSpinBox(prefix="Koszt: ")
-        btn = QPushButton("Dodaj", clicked=self.dodaj)
-        for w in [self.i1, self.i2, self.i3, self.i4, self.i5, btn]: h.addWidget(w)
+
+        self.i4 = QSpinBox()
+        self.i4.setPrefix("Czas: ")
+        self.i4.setSuffix(" min")
+        self.i4.setMaximum(1000)
+
+        self.i5 = QDoubleSpinBox()
+        self.i5.setPrefix("Koszt: ")
+        self.i5.setSuffix(" PLN")
+        self.i5.setMaximum(100000.0)
+
+        btn = QPushButton("Dodaj")
+        btn.clicked.connect(self.dodaj)
+
+        for w in [self.i1, self.i2, self.i3, self.i4, self.i5, btn]:
+            h.addWidget(w)
         layout.addLayout(h)
 
         # Tabela i Wykres
         body = QHBoxLayout()
         self.t = QTableWidget(0, 6)
         self.t.setHorizontalHeaderLabels(["ID", "Reg", "Usługa", "Czas", "Koszt", "Status"])
-        self.t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.t.setSelectionBehavior(QAbstractItemView.SelectRows)
+
+        # --- MAGICZNA LINIJKA: Automatyczne rozciąganie kolumn ---
+        self.t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
         body.addWidget(self.t, 2)
+
         self.canvas = FigureCanvas(Figure())
         body.addWidget(self.canvas, 1)
         layout.addLayout(body)
 
         # Akcje
         a = QHBoxLayout()
-        a.addWidget(QPushButton("▶ W trakcie", clicked=lambda: self.status("W trakcie")))
-        a.addWidget(QPushButton("✔ Zakończ", clicked=lambda: self.status("Zakończono")))
+        btn_start = QPushButton("▶ W trakcie")
+        btn_start.clicked.connect(lambda: self.status("W trakcie"))
+        btn_end = QPushButton("✔ Zakończ")
+        btn_end.clicked.connect(lambda: self.status("Zakończono"))
+
+        a.addWidget(btn_start)
+        a.addWidget(btn_end)
         layout.addLayout(a)
+
         self.setLayout(layout)
         self.update_gui()
 
     def dodaj(self):
-        self.m.dodaj_zadanie(
-            ProceduraObslugi(self.i1.text(), self.i2.text(), self.i3.currentText(), self.i4.value(), self.i5.value()))
+        if not self.i1.text() or not self.i2.text():
+            return
+
+        nowe = ProceduraObslugi(self.i1.text(), self.i2.text(), self.i3.currentText(), self.i4.value(), self.i5.value())
+        self.m.dodaj_zadanie(nowe)
         self.update_gui()
+
+        # Czyszczenie pól po dodaniu (żeby było wygodniej!)
+        self.i1.clear()
+        self.i2.clear()
+        self.i4.setValue(0)
+        self.i5.setValue(0.0)
 
     def status(self, s):
         r = self.t.currentRow()
@@ -106,10 +152,12 @@ class Okno(QWidget):
                 elif z.status == "W trakcie":
                     item.setBackground(QColor("khaki"))
                 self.t.setItem(r, c, item)
+
         ax = self.canvas.figure.subplots()
         ax.clear()
         dane = self.m.pobierz_czasy()
-        if dane: ax.bar(dane.keys(), dane.values(), color='skyblue')
+        if dane:
+            ax.bar(list(dane.keys()), list(dane.values()), color='skyblue')
         self.canvas.draw()
 
 
@@ -119,7 +167,6 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = Okno(m)
     w.show()
-    app.exec()
+
+    app.exec_()
     m.zapisz()
-pip install PyQt6 matplotlib
-zmienic 5 na 6 i bedzie hulać
