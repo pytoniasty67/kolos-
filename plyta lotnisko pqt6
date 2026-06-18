@@ -1,0 +1,123 @@
+import json
+import os
+import sys
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+                             QTableWidget, QTableWidgetItem, QPushButton,
+                             QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QLabel, QMessageBox, QAbstractItemView)
+from PyQt6.QtGui import QColor
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+# --- LOGIKA ---
+class ProceduraObslugi:
+    def __init__(self, id_z, reg, usluga, czas, koszt):
+        self.id_zadania, self.rejestracja_samolotu = id_z, reg
+        self.nazwa_uslugi, self.czas_trwania_min, self.koszt_uslugi = usluga, czas, koszt
+        self.status = "Oczekuje"
+
+
+class MenedzerPlyty:
+    def __init__(self):
+        self.lista_zadan = []
+
+    def dodaj_zadanie(self, p):
+        self.lista_zadan.append(p)
+
+    def zmien_status(self, id_z, s):
+        for z in self.lista_zadan:
+            if z.id_zadania == id_z: z.status = s
+
+    def pobierz_czasy(self):
+        czasy = {}
+        for z in self.lista_zadan: czasy[z.rejestracja_samolotu] = czasy.get(z.rejestracja_samolotu,
+                                                                             0) + z.czas_trwania_min
+        return czasy
+
+    def zapisz(self):
+        with open("ground_handling.json", 'w') as f:
+            json.dump([z.__dict__ for z in self.lista_zadan], f)
+
+    def wczytaj(self):
+        if os.path.exists("ground_handling.json"):
+            with open("ground_handling.json", 'r') as f:
+                dane = json.load(f)
+                self.lista_zadan = [ProceduraObslugi(d['id_zadania'], d['rejestracja_samolotu'], d['nazwa_uslugi'],
+                                                     d['czas_trwania_min'], d['koszt_uslugi']) for d in dane]
+                for i, z in enumerate(self.lista_zadan): z.status = dane[i]['status']
+
+
+# --- GUI ---
+class Okno(QWidget):
+    def __init__(self, m):
+        super().__init__()
+        self.m = m
+        self.resize(1000, 600)
+        layout = QVBoxLayout()
+
+        # Formularz
+        h = QHBoxLayout()
+        self.i1, self.i2 = QLineEdit(placeholderText="ID"), QLineEdit(placeholderText="Reg")
+        self.i3 = QComboBox()
+        self.i3.addItems(["Tankowanie", "Catering", "Bagaże"])
+        self.i4, self.i5 = QSpinBox(prefix="Czas: "), QDoubleSpinBox(prefix="Koszt: ")
+        btn = QPushButton("Dodaj", clicked=self.dodaj)
+        for w in [self.i1, self.i2, self.i3, self.i4, self.i5, btn]: h.addWidget(w)
+        layout.addLayout(h)
+
+        # Tabela i Wykres
+        body = QHBoxLayout()
+        self.t = QTableWidget(0, 6)
+        self.t.setHorizontalHeaderLabels(["ID", "Reg", "Usługa", "Czas", "Koszt", "Status"])
+        self.t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        body.addWidget(self.t, 2)
+        self.canvas = FigureCanvas(Figure())
+        body.addWidget(self.canvas, 1)
+        layout.addLayout(body)
+
+        # Akcje
+        a = QHBoxLayout()
+        a.addWidget(QPushButton("▶ W trakcie", clicked=lambda: self.status("W trakcie")))
+        a.addWidget(QPushButton("✔ Zakończ", clicked=lambda: self.status("Zakończono")))
+        layout.addLayout(a)
+        self.setLayout(layout)
+        self.update_gui()
+
+    def dodaj(self):
+        self.m.dodaj_zadanie(
+            ProceduraObslugi(self.i1.text(), self.i2.text(), self.i3.currentText(), self.i4.value(), self.i5.value()))
+        self.update_gui()
+
+    def status(self, s):
+        r = self.t.currentRow()
+        if r >= 0:
+            self.m.zmien_status(self.t.item(r, 0).text(), s)
+            self.update_gui()
+
+    def update_gui(self):
+        self.t.setRowCount(len(self.m.lista_zadan))
+        for r, z in enumerate(self.m.lista_zadan):
+            for c, v in enumerate(
+                    [z.id_zadania, z.rejestracja_samolotu, z.nazwa_uslugi, z.czas_trwania_min, z.koszt_uslugi,
+                     z.status]):
+                item = QTableWidgetItem(str(v))
+                if z.status == "Zakończono":
+                    item.setBackground(QColor("lightgreen"))
+                elif z.status == "W trakcie":
+                    item.setBackground(QColor("khaki"))
+                self.t.setItem(r, c, item)
+        ax = self.canvas.figure.subplots()
+        ax.clear()
+        dane = self.m.pobierz_czasy()
+        if dane: ax.bar(dane.keys(), dane.values(), color='skyblue')
+        self.canvas.draw()
+
+
+if __name__ == "__main__":
+    m = MenedzerPlyty()
+    m.wczytaj()
+    app = QApplication(sys.argv)
+    w = Okno(m)
+    w.show()
+    app.exec()
+    m.zapisz()
