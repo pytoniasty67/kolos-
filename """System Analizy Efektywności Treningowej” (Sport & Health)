@@ -1,0 +1,241 @@
+import sys
+import os
+import pandas as pd  # <-- Nowa, potężna biblioteka do Excela
+
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+                             QTableWidget, QTableWidgetItem, QPushButton,
+                             QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit,
+                             QMessageBox, QAbstractItemView, QHeaderView, QFileDialog)
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+# --- CZĘŚĆ 1: LOGIKA (OOP) ---
+class Trening:
+    def __init__(self, id_t, data, typ, dystans, czas, tetno):
+        self.id = str(id_t)
+        self.data = str(data)
+        self.typ_aktywnosci = str(typ)
+        self.dystans_km = float(dystans)
+        self.czas_minuty = float(czas)
+        self.tetno_srednie = int(tetno)
+
+
+class DziennikTreningowy:
+    def __init__(self):
+        self.lista_treningow = []
+
+    def dodaj_trening(self, trening):
+        self.lista_treningow.append(trening)
+
+    def usun_trening(self, id_treningu):
+        # Filtrujemy listę: zostawiamy tylko te treningi, których ID NIE JEST tym usuwanym
+        self.lista_treningow = [t for t in self.lista_treningow if t.id != id_treningu]
+
+    def pobierz_statystyki_per_aktywnosc(self):
+        statystyki = {}
+        for t in self.lista_treningow:
+            statystyki[t.typ_aktywnosci] = statystyki.get(t.typ_aktywnosci, 0.0) + t.dystans_km
+        return statystyki
+
+    def oblicz_srednie_tempo(self, id_treningu):
+        for t in self.lista_treningow:
+            if t.id == id_treningu and t.dystans_km > 0:
+                return round(t.czas_minuty / t.dystans_km, 2)  # min/km
+        return 0.0
+
+    # --- CZĘŚĆ 2: TRWAŁOŚĆ DANYCH (Pandas -> Excel) ---
+    def eksportuj_do_excel(self, sciezka):
+        if not self.lista_treningow:
+            return False
+
+        # 1. Zamieniamy nasze obiekty na słowniki czytelne dla Pandas
+        dane = [{
+            "ID": t.id, "Data": t.data, "Typ": t.typ_aktywnosci,
+            "Dystans (km)": t.dystans_km, "Czas (min)": t.czas_minuty, "Średnie Tętno": t.tetno_srednie
+        } for t in self.lista_treningow]
+
+        # 2. Tworzymy tabelę DataFrame i zapisujemy do Excela w 2 linijkach!
+        df = pd.DataFrame(dane)
+        df.to_excel(sciezka, index=False)
+        return True
+
+    def importuj_z_excel(self, sciezka):
+        if os.path.exists(sciezka):
+            df = pd.read_excel(sciezka)
+            self.lista_treningow.clear()
+            # Iterujemy po wierszach z Excela i na nowo "wskrzeszamy" obiekty
+            for index, row in df.iterrows():
+                nowy = Trening(row["ID"], row["Data"], row["Typ"],
+                               row["Dystans (km)"], row["Czas (min)"], row["Średnie Tętno"])
+                self.lista_treningow.append(nowy)
+
+
+# --- CZĘŚĆ 3: INTERFEJS (PyQt5) ---
+class OknoTreningu(QWidget):
+    def __init__(self, dziennik):
+        super().__init__()
+        self.dziennik = dziennik
+        self.setWindowTitle("System Analizy Efektywności Treningowej")
+        self.resize(1200, 650)
+
+        layout = QVBoxLayout()
+
+        # --- Przyciski Systemowe (Zapisz/Wczytaj z Excela) ---
+        sys_layout = QHBoxLayout()
+        btn_wczytaj = QPushButton("📂 Wczytaj plik Excel")
+        btn_wczytaj.clicked.connect(self.wczytaj_plik)
+        btn_zapisz = QPushButton("💾 Zapisz do Excela")
+        btn_zapisz.clicked.connect(self.zapisz_plik)
+        sys_layout.addWidget(btn_wczytaj)
+        sys_layout.addWidget(btn_zapisz)
+        layout.addLayout(sys_layout)
+
+        # --- Formularz wprowadzania ---
+        form_layout = QHBoxLayout()
+
+        self.in_id = QLineEdit()
+        self.in_id.setPlaceholderText("ID (np. T01)")
+
+        self.in_data = QLineEdit()
+        self.in_data.setPlaceholderText("Data (DD-MM-YYYY)")
+
+        self.in_typ = QComboBox()
+        self.in_typ.addItems(["Bieganie", "Rower", "Pływanie"])
+
+        self.in_dystans = QDoubleSpinBox()
+        self.in_dystans.setPrefix("Dystans: ")
+        self.in_dystans.setSuffix(" km")
+        self.in_dystans.setMaximum(500.0)
+
+        self.in_czas = QDoubleSpinBox()
+        self.in_czas.setPrefix("Czas: ")
+        self.in_czas.setSuffix(" min")
+        self.in_czas.setMaximum(1000.0)
+
+        self.in_tetno = QSpinBox()
+        self.in_tetno.setPrefix("Tętno: ")
+        self.in_tetno.setSuffix(" bpm")
+        self.in_tetno.setRange(40, 220)
+        self.in_tetno.setValue(130)
+
+        btn_dodaj = QPushButton("Dodaj Trening")
+        btn_dodaj.setStyleSheet("background-color: lightgreen; font-weight: bold;")
+        btn_dodaj.clicked.connect(self.dodaj_trening)
+
+        for w in [self.in_id, self.in_data, self.in_typ, self.in_dystans, self.in_czas, self.in_tetno, btn_dodaj]:
+            form_layout.addWidget(w)
+        layout.addLayout(form_layout)
+
+        # --- Tabela i Usuwanie ---
+        body_layout = QHBoxLayout()
+
+        lewa_strona = QVBoxLayout()
+        self.tabela = QTableWidget(0, 7)
+        self.tabela.setHorizontalHeaderLabels(
+            ["ID", "Data", "Typ", "Dystans (km)", "Czas (min)", "Tętno", "Tempo (min/km)"])
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        lewa_strona.addWidget(self.tabela)
+
+        btn_usun = QPushButton("🗑️ Usuń zaznaczony trening")
+        btn_usun.setStyleSheet("background-color: #ffcccc;")
+        btn_usun.clicked.connect(self.usun_zaznaczony)
+        lewa_strona.addWidget(btn_usun)
+
+        body_layout.addLayout(lewa_strona, 2)
+
+        # --- Wykres ---
+        self.canvas = FigureCanvas(Figure())
+        body_layout.addWidget(self.canvas, 2)
+
+        layout.addLayout(body_layout)
+        self.setLayout(layout)
+
+        self.odswiez_gui()
+
+    # --- FUNKCJE GUI ---
+    def dodaj_trening(self):
+        id_t = self.in_id.text().strip()
+        if not id_t:
+            QMessageBox.warning(self, "Błąd", "ID treningu nie może być puste!")
+            return
+
+        nowy = Trening(id_t, self.in_data.text(), self.in_typ.currentText(),
+                       self.in_dystans.value(), self.in_czas.value(), self.in_tetno.value())
+        self.dziennik.dodaj_trening(nowy)
+        self.odswiez_gui()
+
+    def usun_zaznaczony(self):
+        rzad = self.tabela.currentRow()
+        if rzad >= 0:
+            id_do_usuniecia = self.tabela.item(rzad, 0).text()  # Pobieramy tekst z pierwszej kolumny (ID)
+            self.dziennik.usun_trening(id_do_usuniecia)
+            self.odswiez_gui()
+        else:
+            QMessageBox.information(self, "Info", "Najpierw zaznacz wiersz w tabeli, który chcesz usunąć.")
+
+    def wczytaj_plik(self):
+        # Magia PyQt: Otwiera systemowe okienko wyboru pliku
+        sciezka, _ = QFileDialog.getOpenFileName(self, "Wybierz plik z treningami", "", "Excel Files (*.xlsx)")
+        if sciezka:
+            self.dziennik.importuj_z_excel(sciezka)
+            self.odswiez_gui()
+
+    def zapisz_plik(self):
+        # Otwiera systemowe okienko zapisu pliku
+        sciezka, _ = QFileDialog.getSaveFileName(self, "Zapisz dziennik", "moje_treningi.xlsx", "Excel Files (*.xlsx)")
+        if sciezka:
+            if self.dziennik.eksportuj_do_excel(sciezka):
+                QMessageBox.information(self, "Sukces", "Pomyślnie zapisano plik Excel!")
+            else:
+                QMessageBox.warning(self, "Błąd", "Brak danych do zapisania.")
+
+    def odswiez_gui(self):
+        # 1. Rysowanie tabeli
+        self.tabela.setRowCount(len(self.dziennik.lista_treningow))
+        for r, t in enumerate(self.dziennik.lista_treningow):
+            tempo = self.dziennik.oblicz_srednie_tempo(t.id)
+            dane_wiersza = [t.id, t.data, t.typ_aktywnosci, str(t.dystans_km),
+                            str(t.czas_minuty), str(t.tetno_srednie), str(tempo)]
+
+            for c, wartosc in enumerate(dane_wiersza):
+                self.tabela.setItem(r, c, QTableWidgetItem(wartosc))
+
+        # 2. Rysowanie Wykresów (Robimy dwa obok siebie dla efektu WOW!)
+        self.canvas.figure.clear()
+
+        if len(self.dziennik.lista_treningow) > 0:
+            # Tworzymy 2 miejsca na wykres (1 wiersz, 2 kolumny)
+            ax1 = self.canvas.figure.add_subplot(121)
+            ax2 = self.canvas.figure.add_subplot(122)
+
+            # Wykres 1: Słupkowy (Dystans per aktywność)
+            statystyki = self.dziennik.pobierz_statystyki_per_aktywnosc()
+            ax1.bar(list(statystyki.keys()), list(statystyki.values()), color=['#4CAF50', '#2196F3', '#FF9800'])
+            ax1.set_title("Łączny Dystans (km)")
+
+            # Wykres 2 (Advanced): Scatter plot (Czas vs Tętno)
+            czasy = [t.czas_minuty for t in self.dziennik.lista_treningow]
+            tetna = [t.tetno_srednie for t in self.dziennik.lista_treningow]
+            ax2.scatter(czasy, tetna, color='red', s=100, alpha=0.6)  # s=wielkość kropki, alpha=przezroczystość
+            ax2.set_title("Relacja Czasu do Tętna")
+            ax2.set_xlabel("Czas (min)")
+            ax2.set_ylabel("Tętno (bpm)")
+        else:
+            ax = self.canvas.figure.add_subplot(111)
+            ax.text(0.5, 0.5, "Brak treningów. Dodaj dane lub wczytaj plik Excel.", ha='center', va='center')
+
+        self.canvas.figure.tight_layout()
+        self.canvas.draw()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+
+    dziennik = DziennikTreningowy()
+    okno = OknoTreningu(dziennik)
+    okno.show()
+
+    app.exec_()
