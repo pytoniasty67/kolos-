@@ -170,3 +170,4 @@ if __name__ == "__main__":
 
     app.exec_()
     m.zapisz()
+System Koordynacji Obsługi Naziemnej Samolotów
