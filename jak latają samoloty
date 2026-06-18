@@ -1,0 +1,244 @@
+import json
+import sys
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+                             QTableWidget, QTableWidgetItem, QPushButton,
+                             QLineEdit, QComboBox, QSpinBox, QLabel, QMessageBox, QAbstractItemView)
+from PyQt5.QtGui import QColor
+
+# --- NOWE IMPORTY DO WYKRESÓW ---
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+
+# --- CZĘŚĆ 1 i 2 (Logika i dane - bez zmian) ---
+class Lot:
+    def __init__(self, numer_lotu, linia_lotnicza, kierunek, typ_operacji, planowana_godzina):
+        self.numer_lotu = numer_lotu
+        self.linia_lotnicza = linia_lotnicza
+        self.kierunek = kierunek
+        self.typ_operacji = typ_operacji
+        self.planowana_godzina = planowana_godzina
+        self.opoznienie_min = 0
+        self.status = "Planowany"
+
+
+class MenedzerLotniska:
+    def __init__(self):
+        self.lista_lotow = []
+
+    def dodaj_lot(self, lot):
+        self.lista_lotow.append(lot)
+
+    def aktualizuj_opoznienie(self, numer_lotu, minuty):
+        for lot in self.lista_lotow:
+            if lot.numer_lotu == numer_lotu:
+                lot.opoznienie_min = minuty
+                if minuty > 0:
+                    lot.status = "Opóźniony"
+                return
+
+    def oblicz_srednie_opoznienie(self, linia_lotnicza):
+        suma = 0
+        ilosc = 0
+        for lot in self.lista_lotow:
+            if lot.linia_lotnicza == linia_lotnicza:
+                suma += lot.opoznienie_min
+                ilosc += 1
+        return suma / ilosc if ilosc > 0 else 0
+
+    def zapisz_rozklad(self, sciezka="rozklad.json"):
+        dane = [{"numer_lotu": l.numer_lotu, "linia_lotnicza": l.linia_lotnicza,
+                 "kierunek": l.kierunek, "typ_operacji": l.typ_operacji,
+                 "planowana_godzina": l.planowana_godzina, "opoznienie_min": l.opoznienie_min,
+                 "status": l.status} for l in self.lista_lotow]
+        with open(sciezka, 'w', encoding='utf-8') as plik:
+            json.dump(dane, plik, indent=4, ensure_ascii=False)
+
+    def wczytaj_rozklad(self, sciezka="rozklad.json"):
+        try:
+            with open(sciezka, 'r', encoding='utf-8') as plik:
+                dane = json.load(plik)
+                self.lista_lotow = []
+                for item in dane:
+                    nowy_lot = Lot(item["numer_lotu"], item["linia_lotnicza"], item["kierunek"], item["typ_operacji"],
+                                   item["planowana_godzina"])
+                    nowy_lot.opoznienie_min = item["opoznienie_min"]
+                    nowy_lot.status = item["status"]
+                    self.lista_lotow.append(nowy_lot)
+        except FileNotFoundError:
+            pass
+
+
+# --- CZĘŚĆ 3 i 4: Interfejs Graficzny i Wykresy ---
+class OknoLotniska(QWidget):
+    def __init__(self, menedzer):
+        super().__init__()
+        self.menedzer = menedzer
+
+        self.setWindowTitle("System Kontroli Ruchu Lotniczego - Wersja Finalna")
+        self.resize(1200, 600)  # Powiększamy okno, żeby zmieścić wykres
+
+        self.setStyleSheet("""
+            QWidget { background-color: #121212; color: #e0e0e0; font-family: Arial; }
+            QTableWidget { background-color: #000000; color: #00FF00; font-size: 14px; gridline-color: #333333; }
+            QHeaderView::section { background-color: #222222; color: #FFD700; font-weight: bold; padding: 4px; }
+            QPushButton { background-color: #333333; color: white; padding: 5px; border-radius: 3px; }
+            QPushButton:hover { background-color: #555555; }
+            QLineEdit, QComboBox, QSpinBox { background-color: #222222; color: white; padding: 3px; }
+        """)
+
+        glowny_layout = QVBoxLayout()
+
+        # Sekcja dodawania (Góra)
+        layout_dodawania = QHBoxLayout()
+        self.input_numer = QLineEdit()
+        self.input_numer.setPlaceholderText("Nr lotu (np. LO123)")
+        self.combo_linia = QComboBox()
+        self.combo_linia.addItems(["PLL LOT", "Ryanair", "Lufthansa", "WizzAir"])
+        self.input_kierunek = QLineEdit()
+        self.input_kierunek.setPlaceholderText("Kierunek")
+        self.combo_typ = QComboBox()
+        self.combo_typ.addItems(["Przylot", "Odlot"])
+        self.input_godzina = QLineEdit()
+        self.input_godzina.setPlaceholderText("Godz. (np. 14:30)")
+        self.btn_dodaj = QPushButton("Dodaj Nowy Lot")
+        self.btn_dodaj.clicked.connect(self.dodaj_lot_z_gui)
+
+        layout_dodawania.addWidget(self.input_numer)
+        layout_dodawania.addWidget(self.combo_linia)
+        layout_dodawania.addWidget(self.input_kierunek)
+        layout_dodawania.addWidget(self.combo_typ)
+        layout_dodawania.addWidget(self.input_godzina)
+        layout_dodawania.addWidget(self.btn_dodaj)
+        glowny_layout.addLayout(layout_dodawania)
+
+        # Środek: Tabela (lewo) i Wykres (prawo)
+        srodek_layout = QHBoxLayout()
+
+        self.tabela = QTableWidget()
+        self.tabela.setColumnCount(7)
+        self.tabela.setHorizontalHeaderLabels(["Numer", "Linia", "Kierunek", "Typ", "Godzina", "Opóźnienie", "Status"])
+        self.tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
+        srodek_layout.addWidget(self.tabela, stretch=2)  # Tabela zajmuje więcej miejsca
+
+        # Przygotowanie płótna (Canvas) pod wykres Matplotlib
+        self.fig = Figure(figsize=(5, 4), dpi=100)
+        self.canvas = FigureCanvas(self.fig)
+        self.ax = self.fig.add_subplot(111)
+        srodek_layout.addWidget(self.canvas, stretch=1)  # Wykres po prawej
+
+        glowny_layout.addLayout(srodek_layout)
+
+        # Dół: Aktualizacja statusu i Eksport
+        layout_aktualizacji = QHBoxLayout()
+        layout_aktualizacji.addWidget(QLabel("Wybierz lot z tabeli, wpisz opóźnienie:"))
+        self.spin_opoznienie = QSpinBox()
+        self.spin_opoznienie.setMaximum(1000)
+        layout_aktualizacji.addWidget(self.spin_opoznienie)
+        self.btn_aktualizuj = QPushButton("Aktualizuj status")
+        self.btn_aktualizuj.clicked.connect(self.aktualizuj_status_z_gui)
+        layout_aktualizacji.addWidget(self.btn_aktualizuj)
+
+        # Przycisk Eksportu Raportu
+        self.btn_eksport = QPushButton("Eksportuj raport dobowy")
+        self.btn_eksport.setStyleSheet("background-color: #005500; font-weight: bold;")  # Wyróżniamy go
+        self.btn_eksport.clicked.connect(self.eksportuj_raport)
+        layout_aktualizacji.addWidget(self.btn_eksport)
+
+        glowny_layout.addLayout(layout_aktualizacji)
+        self.setLayout(glowny_layout)
+
+        self.odswiez_tabele()
+
+    # --- FUNKCJE GUI ---
+
+    def dodaj_lot_z_gui(self):
+        numer = self.input_numer.text()
+        linia = self.combo_linia.currentText()
+        kierunek = self.input_kierunek.text()
+        typ = self.combo_typ.currentText()
+        godzina = self.input_godzina.text()
+
+        if not numer or not kierunek or not godzina:
+            QMessageBox.warning(self, "Błąd", "Wypełnij wszystkie pola!")
+            return
+
+        nowy_lot = Lot(numer, linia, kierunek, typ, godzina)
+        self.menedzer.dodaj_lot(nowy_lot)
+        self.odswiez_tabele()
+
+        self.input_numer.clear()
+        self.input_kierunek.clear()
+        self.input_godzina.clear()
+
+    def aktualizuj_status_z_gui(self):
+        wybrany_rzad = self.tabela.currentRow()
+        if wybrany_rzad < 0:
+            QMessageBox.warning(self, "Błąd", "Najpierw zaznacz lot w tabeli!")
+            return
+
+        numer_lotu = self.tabela.item(wybrany_rzad, 0).text()
+        minuty = self.spin_opoznienie.value()
+
+        self.menedzer.aktualizuj_opoznienie(numer_lotu, minuty)
+        self.odswiez_tabele()
+        self.spin_opoznienie.setValue(0)
+
+    def odswiez_tabele(self):
+        self.tabela.setRowCount(len(self.menedzer.lista_lotow))
+        for wiersz, lot in enumerate(self.menedzer.lista_lotow):
+            self.tabela.setItem(wiersz, 0, QTableWidgetItem(lot.numer_lotu))
+            self.tabela.setItem(wiersz, 1, QTableWidgetItem(lot.linia_lotnicza))
+            self.tabela.setItem(wiersz, 2, QTableWidgetItem(lot.kierunek))
+            self.tabela.setItem(wiersz, 3, QTableWidgetItem(lot.typ_operacji))
+            self.tabela.setItem(wiersz, 4, QTableWidgetItem(lot.planowana_godzina))
+            self.tabela.setItem(wiersz, 5, QTableWidgetItem(str(lot.opoznienie_min)))
+            self.tabela.setItem(wiersz, 6, QTableWidgetItem(lot.status))
+
+            if lot.status == "Opóźniony":
+                for kolumna in range(7):
+                    self.tabela.item(wiersz, kolumna).setForeground(QColor("red"))
+
+        # Wykres i Tabela żyją razem – każda zmiana w tabeli odświeża wykres!
+        self.odswiez_wykres()
+
+    def odswiez_wykres(self):
+        self.ax.clear()  # Czyścimy stary wykres
+
+        linie = ["PLL LOT", "Ryanair", "Lufthansa", "WizzAir"]
+        opoznienia = [self.menedzer.oblicz_srednie_opoznienie(l) for l in linie]
+
+        # Rysujemy słupki
+        self.ax.bar(linie, opoznienia, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'])
+        self.ax.set_title('Średnie opóźnienie wg. Linii (min)')
+        self.ax.set_ylabel('Minuty')
+
+        # Żeby wykres pasował do ciemnego tła
+        self.fig.patch.set_facecolor('#121212')
+        self.ax.set_facecolor('#222222')
+        self.ax.tick_params(colors='white')
+        self.ax.xaxis.label.set_color('white')
+        self.ax.yaxis.label.set_color('white')
+        self.ax.title.set_color('white')
+
+        self.canvas.draw()
+
+    def eksportuj_raport(self):
+        with open("raport_dobowy.txt", "w", encoding="utf-8") as plik:
+            plik.write("RAPORT DOBOWY - LOTNISKO\n")
+            plik.write("=" * 30 + "\n")
+            for lot in self.menedzer.lista_lotow:
+                plik.write(
+                    f"{lot.numer_lotu} | {lot.linia_lotnicza} | Status: {lot.status} | Opóźnienie: {lot.opoznienie_min} min\n")
+        QMessageBox.information(self, "Sukces", "Wygenerowano plik 'raport_dobowy.txt' w folderze projektu!")
+
+
+if __name__ == "__main__":
+    lotnisko = MenedzerLotniska()
+    lotnisko.wczytaj_rozklad()
+    app = QApplication(sys.argv)
+    okno = OknoLotniska(lotnisko)
+    okno.show()
+    kod_wyjscia = app.exec_()
+    lotnisko.zapisz_rozklad()
+    sys.exit(kod_wyjscia)
