@@ -205,12 +205,67 @@ def zmien_status_po_nazwie(self, nazwa, nowy_status):
 ////
 
 
+class Flight:
+    licznik_id = 1
 
+    def __init__(self, model_drona, czas_minuty, data):
+        self.flight_id = Flight.licznik_id
+        Flight.licznik_id += 1
+        self.model_drona = str(model_drona)
+        self.czas_minuty = int(czas_minuty)
+        self.data = str(data)
+
+class DroneManager:
+    def __init__(self):
+        self.loty = []
+
+    def dodaj_lot(self, model_drona, czas_minuty, data):
+        nowy_lot = Flight(model_drona, czas_minuty, data)
+        self.loty.append(nowy_lot)
+
+    def pobierz_wszystkie_loty(self):
+        return self.loty
+
+    def oblicz_calkowity_nalot(self, model_drona):
+        suma_minut = 0
+        for lot in self.loty:
+            if lot.model_drona == model_drona:
+                suma_minut += lot.czas_minuty
+        return suma_minut / 60.0
+
+    def pobierz_slownik_nalotu(self):
+        slownik = {}
+        for lot in self.loty:
+            if lot.model_drona in slownik:
+                slownik[lot.model_drona] += lot.czas_minuty
+            else:
+                slownik[lot.model_drona] = lot.czas_minuty
+
+        for model in slownik:
+            slownik[model] = slownik[model] / 60.0
+        return slownik
+
+if __name__ == '__main__':
+    manager = DroneManager()
+
+    manager.dodaj_lot("DJI Mavic 3", 120, "2026-06-19")
+    manager.dodaj_lot("DJI Mavic 3", 150, "2026-06-20")
+    manager.dodaj_lot("Autel Evo II", 60, "2026-06-21")
+    manager.dodaj_lot("Autel Evo II", 30, "2026-06-22")
+
+    print("--- RAPORT NALOTU DRONÓW ---")
+    raport = manager.pobierz_slownik_nalotu()
+    for model, godziny in raport.items():
+        print(f"{model}: {godziny} godziny")
 
 
 ////
 
+Klasa Flight : To zwykły formularz. Podajesz mu model drona, czas i datę, a on sam nadaje mu unikalny, kolejny numer (ID), żebyś nie musiał wpisywać go ręcznie.
 
+Klasa DroneManager : To wirtualny segregator z kalkulatorem. Trzyma wszystkie formularze (loty) w jednym miejscu i potrafi na zawołanie zsumować minuty dla konkretnego drona, od razu zamieniając je na wygodne godziny (dzieląc przez 60).
+
+Blok if __name__ == '__main__': To strefa prób. Uruchamia się tylko wtedy, gdy włączasz ten konkretny plik. Służy do tego, żeby wklepać kilka "zmyślonych" lotów i wydrukować wynik w konsoli – to dowód dla prowadzącego, że Twój kod faktycznie dobrze liczy.
 
 
 
