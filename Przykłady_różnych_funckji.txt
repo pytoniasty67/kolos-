@@ -651,3 +651,60 @@ System Koordynacji Obsługi Naziemnej Samolotów dół
 System kontroli i rejestracji ruchu lotniczego góra
 
 System Monitorowania Stacji Pogodowej winda
+
+
+
+
+def zapisz_do_json(self, sciezka_pliku):
+        lista_slownikow = []
+        for lot in self.loty:
+            lista_slownikow.append(lot.__dict__)
+        with open(sciezka_pliku, 'w', encoding='utf-8') as f:
+            json.dump(lista_slownikow, f, indent=4)
+
+    def wczytaj_z_json(self, sciezka_pliku):
+        try:
+            with open(sciezka_pliku, 'r', encoding='utf-8') as f:
+                dane_z_pliku = json.load(f)
+            
+            self.loty.clear()
+            max_id = 0
+            for wiersz in dane_z_pliku:
+                odtworzony_lot = Flight(wiersz['model_drona'], wiersz['czas_minuty'], wiersz['data'])
+                odtworzony_lot.flight_id = wiersz['flight_id']
+                self.loty.append(odtworzony_lot)
+                if odtworzony_lot.flight_id > max_id:
+                    max_id = odtworzony_lot.flight_id
+            
+            Flight.licznik_id = max_id + 1
+        except FileNotFoundError:
+            print("INFO: Brak pliku z danymi. Tworzę nowy, czysty plik...")
+            with open(sciezka_pliku, 'w', encoding='utf-8') as f:
+                json.dump([], f)
+
+
+
+
+
+if __name__ == '__main__':
+    manager = DroneManager()
+    nazwa_pliku = "baza_lotow.json"
+
+    # Wczytanie z pliku (jeśli istnieje)
+    manager.wczytaj_z_json(nazwa_pliku)
+
+    # Stan floty PRZED dodaniem nowego lotu
+    ilosc_przed = len(manager.pobierz_wszystkie_loty())
+    print(f"Stan floty po uruchomieniu: {ilosc_przed} lotów.")
+
+    # Dodanie jednego nowego lotu
+    manager.dodaj_lot("DJI Mini 3", 45, "2026-06-19")
+    print("Dodano 1 nowy lot.")
+
+    # Stan floty PO dodaniu lotu
+    ilosc_po = len(manager.pobierz_wszystkie_loty())
+    print(f"Stan floty przed wyłączeniem: {ilosc_po} lotów.")
+
+    # Zapisanie do pliku
+    manager.zapisz_do_json(nazwa_pliku)
+    print("Zapisano zmiany do pliku JSON.")
