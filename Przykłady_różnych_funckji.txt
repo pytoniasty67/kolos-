@@ -203,7 +203,92 @@ def zmien_status_po_nazwie(self, nazwa, nowy_status):
 
 
 ////
+import json
 
+class Flight:
+    licznik_id = 1
+
+    def __init__(self, model_drona, czas_minuty, data):
+        self.flight_id = Flight.licznik_id
+        Flight.licznik_id += 1
+        self.model_drona = str(model_drona)
+        self.czas_minuty = int(czas_minuty)
+        self.data = str(data)
+
+class DroneManager:
+    def __init__(self):
+        self.loty = []
+
+    def dodaj_lot(self, model_drona, czas_minuty, data):
+        nowy_lot = Flight(model_drona, czas_minuty, data)
+        self.loty.append(nowy_lot)
+
+    def pobierz_wszystkie_loty(self):
+        return self.loty
+
+    def oblicz_calkowity_nalot(self, model_drona):
+        suma_minut = 0
+        for lot in self.loty:
+            if lot.model_drona == model_drona:
+                suma_minut += lot.czas_minuty
+        return suma_minut / 60.0
+
+    def pobierz_slownik_nalotu(self):
+        slownik = {}
+        for lot in self.loty:
+            if lot.model_drona in slownik:
+                slownik[lot.model_drona] += lot.czas_minuty
+            else:
+                slownik[lot.model_drona] = lot.czas_minuty
+
+        for model in slownik:
+            slownik[model] = slownik[model] / 60.0
+        return slownik
+
+    def zapisz_do_json(self, sciezka_pliku):
+        lista_slownikow = []
+        for lot in self.loty:
+            lista_slownikow.append(lot.__dict__)
+        with open(sciezka_pliku, 'w', encoding='utf-8') as f:
+            json.dump(lista_slownikow, f, indent=4)
+
+    def wczytaj_z_json(self, sciezka_pliku):
+        try:
+            with open(sciezka_pliku, 'r', encoding='utf-8') as f:
+                dane_z_pliku = json.load(f)
+            
+            self.loty.clear()
+            max_id = 0
+            for wiersz in dane_z_pliku:
+                odtworzony_lot = Flight(wiersz['model_drona'], wiersz['czas_minuty'], wiersz['data'])
+                odtworzony_lot.flight_id = wiersz['flight_id']
+                self.loty.append(odtworzony_lot)
+                if odtworzony_lot.flight_id > max_id:
+                    max_id = odtworzony_lot.flight_id
+            
+            Flight.licznik_id = max_id + 1
+        except FileNotFoundError:
+            print("INFO: Brak pliku z danymi. Tworzę nowy, czysty plik...")
+            with open(sciezka_pliku, 'w', encoding='utf-8') as f:
+                json.dump([], f)
+
+if __name__ == '__main__':
+    manager = DroneManager()
+    nazwa_pliku = "baza_lotow.json"
+
+    manager.wczytaj_z_json(nazwa_pliku)
+
+    ilosc_przed = len(manager.pobierz_wszystkie_loty())
+    print(f"Stan floty po uruchomieniu: {ilosc_przed} lotów.")
+
+    manager.dodaj_lot("DJI Mini 3", 45, "2026-06-19")
+    print("Dodano 1 nowy lot.")
+
+    ilosc_po = len(manager.pobierz_wszystkie_loty())
+    print(f"Stan floty przed wyłączeniem: {ilosc_po} lotów.")
+
+    manager.zapisz_do_json(nazwa_pliku)
+    print("Zapisano zmiany do pliku JSON.")
 
 class Flight:
     licznik_id = 1
